@@ -4,9 +4,23 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+// Configuración de conexión con tu URL pública de Render
+const connectionString = 'postgresql://cyberverse_user:Hv4pgpYS2Z3Wc69eu2W8wIrlceARG4Mx@dpg-d6l38dvpm1nc739457pg-a.oregon-postgres.render.com/cyberverse';
+
 const pool = new Pool({
-  user: 'postgres', host: 'localhost', database: 'cyberverse',
-  password: 'postgres', port: 5432,
+  connectionString: connectionString,
+  ssl: {
+    rejectUnauthorized: false // Requerido para conectar a Render desde afuera
+  }
+});
+
+// Verificación de conexión inicial
+pool.connect((err, client, release) => {
+  if (err) {
+    return console.error('Error de conexión a la base:', err.stack);
+  }
+  console.log('Conectado a la base de datos de Render exitosamente');
+  release();
 });
 
 app.use(cors());
