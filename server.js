@@ -281,19 +281,19 @@ app.get('/api/market-sales-tracker', async (req, res) => {
     const query = `
       SELECT 
         m.nombre, 
-        COUNT(*) as volumen_vendido, 
-        AVG(price) as precio_venta_promedio,
-        MAX(l.snapshot_at) as ultima_venta -- Para saber la hora exacta
+        l.amount as volumen_vendido, -- El monto real de esa venta
+        l.price as precio_venta,    -- El precio real de esa venta
+        l.snapshot_at as ultima_venta
       FROM market_listings l
       JOIN materiales m ON l.game_id = m.game_id
-      WHERE snapshot_at >= NOW() - INTERVAL '24 hours'
-      GROUP BY m.nombre
-      ORDER BY ultima_venta DESC -- LO ÚLTIMO ARRIBA
-      LIMIT 20;
+      WHERE l.snapshot_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY l.snapshot_at DESC -- Trae lo más nuevo primero
+      LIMIT 30; -- Mostramos las últimas 30 ventas reales
     `;
     const result = await pool.query(query);
     res.json(result.rows);
   } catch (err) {
+    console.error(err);
     res.status(500).json([]);
   }
 });

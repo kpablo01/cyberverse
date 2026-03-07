@@ -1,8 +1,8 @@
 let materialesLocales = [];
 let globalChart = null;
 let detailChart = null;
+let marketDataFull = [];
 
-// Agregamos (config) para recibir el modo
 export async function initMarketLiveTab(config = { mode: 'read' }) {
     const isAdmin = config.mode === 'admin';
 
@@ -15,28 +15,7 @@ export async function initMarketLiveTab(config = { mode: 'read' }) {
         search: document.getElementById('market-search')
     };
 
-    const loadData = async () => {
-        if (elements.status) elements.status.textContent = 'SYNCING...';
-        try {
-            const [resMats, resMetrics, resMarket, resSales] = await Promise.all([
-                fetch('/api/materiales').then(r => r.json()),
-                fetch('/api/market-metrics').then(r => r.json()),
-                fetch('/api/market-live').then(r => r.json()),
-                fetch('/api/market-sales-tracker').then(r => r.json())
-            ]);
-
-            materialesLocales = resMats;
-            renderMetrics(resMetrics);
-            renderRows(resMarket);
-            renderSalesData(resSales);
-
-            if (elements.status) elements.status.textContent = `LIVE | ${new Date().toLocaleTimeString('es-AR')}`;
-        } catch (err) {
-            console.error(err);
-            if (elements.status) elements.status.textContent = 'LINK ERROR';
-        }
-    };
-
+    // --- RENDERIZADO DE MÉTRICAS ---
     const renderMetrics = (metrics) => {
         if (!elements.metrics) return;
         const totalVol = metrics.reduce((acc, m) => acc + (Number(m.current_min_price) * Number(m.current_total_supply)), 0);
@@ -69,6 +48,7 @@ export async function initMarketLiveTab(config = { mode: 'read' }) {
         }).join('');
     };
 
+    // --- RENDERIZADO DE VENTAS ---
     const renderSalesData = (sales) => {
         const salesContainer = document.getElementById('sales-list') || elements.sales;
         if (!salesContainer) return;
@@ -76,24 +56,39 @@ export async function initMarketLiveTab(config = { mode: 'read' }) {
             salesContainer.innerHTML = `<div class="text-center text-gray-600 text-[10px] py-20 italic">No incoming data...</div>`;
             return;
         }
+        
         salesContainer.innerHTML = sales.map(s => {
-            const totalVenta = (Number(s.volumen_vendido) * Number(s.precio_venta_promedio)).toFixed(2);
-            const horaVenta = s.ultima_venta ? new Date(s.ultima_venta).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+            const precio = Number(s.precio_venta) || 0;
+            const cantidad = Number(s.volumen_vendido) || 0;
+            const totalVenta = (cantidad * precio).toFixed(2);
+            
+            const fechaObj = s.ultima_venta ? new Date(s.ultima_venta) : null;
+            const horaVenta = fechaObj 
+                ? fechaObj.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) 
+                : '--/-- --:--';
+    
             const isBigSale = Number(totalVenta) > 500;
+    
             return `
                 <div class="group border-l-4 ${isBigSale ? 'border-orange-500 bg-orange-500/10' : 'border-cyan-500/30 bg-gray-900/80'} p-3 rounded-r-lg mb-2">
                     <div class="flex justify-between items-start mb-1">
-                        <span class="text-[9px] font-mono ${isBigSale ? 'text-orange-400' : 'text-cyan-400'} font-black">VOL: ${totalVenta} CYPX</span>
-                        <span class="text-[9px] text-gray-400 font-mono">${horaVenta}</span>
+                        <span class="text-[9px] font-mono ${isBigSale ? 'text-orange-400' : 'text-cyan-400'} font-black">
+                            ${isBigSale ? '🔥 ' : ''}TOTAL: ${totalVenta} CYPX
+                        </span>
+                        <span class="text-[9px] text-gray-400 font-mono italic">${horaVenta}hs</span>
                     </div>
                     <div class="flex justify-between items-center">
                         <div class="text-[11px] text-gray-100 font-bold">${s.nombre}</div>
-                        <div class="text-xs text-white font-mono font-black">x${s.volumen_vendido}</div>
+                        <div class="flex flex-col items-end">
+                            <div class="text-xs text-white font-mono font-black">x${cantidad}</div>
+                            <div class="text-[8px] text-gray-500 font-mono">$${precio} c/u</div>
+                        </div>
                     </div>
                 </div>`;
         }).join('');
     };
     
+    // --- RENDERIZADO DE FILAS ---
     const renderRows = (data) => {
         if (!elements.tbody) return;
         elements.tbody.innerHTML = data.map(item => {
@@ -116,8 +111,7 @@ export async function initMarketLiveTab(config = { mode: 'read' }) {
                     <td class="p-3 text-[10px] text-gray-600 text-right">${hora}</td>
                 </tr>`;
             } 
-    
-            // Lógica condicional ADMIN vs MONITOR
+
             const selector = isAdmin ? `
                 <select onchange="vincularGameID(${item.game_id}, this.value)" 
                         class="bg-black text-[10px] border border-red-500/30 rounded p-1 w-full text-red-200 outline-none">
@@ -137,11 +131,52 @@ export async function initMarketLiveTab(config = { mode: 'read' }) {
         }).join('');
     };
 
+    // --- CARGA DE DATOS ---
+    const loadData = async () => {
+        if (elements.status) elements.status.textContent = 'SYNCING...';
+        try {
+            const [resMats, resMetrics, resMarket, resSales] = await Promise.all([
+                fetch('/api/materiales').then(r => r.json()),
+                fetch('/api/market-metrics').then(r => r.json()),
+                fetch('/api/market-live').then(r => r.json()),
+                fetch('/api/market-sales-tracker').then(r => r.json())
+            ]);
+
+            materialesLocales = resMats;
+            marketDataFull = resMarket;
+
+            renderMetrics(resMetrics);
+            renderRows(resMarket);
+            renderSalesData(resSales);
+
+            if (elements.status) elements.status.textContent = `LIVE | ${new Date().toLocaleTimeString('es-AR')}`;
+        } catch (err) {
+            console.error(err);
+            if (elements.status) elements.status.textContent = 'LINK ERROR';
+        }
+    };
+
+    // --- EVENTOS ---
+    elements.search?.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase().trim();
+        if (!term) {
+            renderRows(marketDataFull);
+            return;
+        }
+        const filtered = marketDataFull.filter(item => {
+            const nombre = (item.nombre || "").toLowerCase();
+            const id = (item.game_id || "").toString();
+            return nombre.includes(term) || id.includes(term);
+        });
+        renderRows(filtered);
+    });
+
     elements.refresh?.addEventListener('click', loadData);
+    
     loadData();
 }
 
-// --- FUNCIONES GLOBALES ---
+// --- FUNCIONES GLOBALES (FUERA DE LA PESTAÑA) ---
 
 window.verHistorialMensual = async function(gameId, nombre) {
     const modal = document.getElementById('modal-grafico');
@@ -152,7 +187,6 @@ window.verHistorialMensual = async function(gameId, nombre) {
         const res = await fetch(`/api/market-history-monthly/${gameId}`);
         const data = await res.json();
         
-        // Calculo de línea del 140% (Tareas)
         const precioBase = data.length > 0 ? Number(data[0].precio_base) : 0;
         const targetTarea = precioBase * 1.4;
 
