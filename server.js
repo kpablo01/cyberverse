@@ -226,7 +226,8 @@ app.get('/api/market-metrics', async (req, res) => {
           game_id, 
           AVG(price) as avg_price_24h,
           MIN(price) as min_price_24h,
-          MAX(price) as max_price_24h
+          SUM(amount) as total_volume_24h,
+          COUNT(*) as listings_count_24h
         FROM market_listings
         WHERE snapshot_at >= NOW() - INTERVAL '24 hours'
         GROUP BY game_id
@@ -234,7 +235,8 @@ app.get('/api/market-metrics', async (req, res) => {
       current_market AS (
         SELECT 
           game_id, 
-          MIN(price) as current_min_price
+          MIN(price) as current_min_price,
+          SUM(amount) as current_total_supply
         FROM market_listings
         WHERE snapshot_at >= (SELECT MAX(snapshot_at) FROM market_listings) - INTERVAL '1 minute'
         GROUP BY game_id
@@ -243,20 +245,51 @@ app.get('/api/market-metrics', async (req, res) => {
         m.nombre,
         m.imagen_url,
         c.current_min_price,
+        c.current_total_supply,
         s.avg_price_24h,
         s.min_price_24h,
-        s.max_price_24h,
+        s.total_volume_24h,
+        s.listings_count_24h,
         ((c.current_min_price - s.avg_price_24h) / s.avg_price_24h) * 100 as desviacion_porcentaje
       FROM current_market c
       JOIN stats_24h s ON c.game_id = s.game_id
       JOIN materiales m ON c.game_id = m.game_id
-      ORDER BY desviacion_porcentaje ASC; -- Los más "baratos" respecto a su promedio primero
+      ORDER BY desviacion_porcentaje ASC;
     `;
     
     const result = await pool.query(query);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// HISTORIAL MENSUAL (30 Días)
+app.get('/api/market-history-monthly/:game_id', async (req, res) => {
+  try {
+    const query = `
+      SELECT TO_CHAR(DATE_TRUNC('day', listed_at), 'DD/MM') as fecha, MIN(price) as precio_min, AVG(price) as precio_avg
+      FROM market_listings WHERE game_id = $1 AND listed_at >= NOW() - INTERVAL '30 days'
+      GROUP BY DATE_TRUNC('day', listed_at) ORDER BY DATE_TRUNC('day', listed_at) ASC;`;
+    const result = await pool.query(query, [req.params.game_id]);
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/market-sales-tracker', async (req, res) => {
+  try {
+    const query = `
+      SELECT m.nombre, COUNT(*) as volumen_vendido, AVG(price) as precio_venta_promedio
+      FROM market_listings l
+      JOIN materiales m ON l.game_id = m.game_id
+      WHERE snapshot_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY m.nombre
+      LIMIT 10;
+    `;
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json([]);
   }
 });
 

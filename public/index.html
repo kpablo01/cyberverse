@@ -5,123 +5,124 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cyberverse Dashboard | Market & Craft</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen bg-black text-gray-200 font-sans">
 
-    <nav class="nav-cyber">
-        <div class="max-w-7xl mx-auto flex items-center justify-between px-4">
+    <nav class="bg-gray-900 border-b border-purple-500/30 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex items-center justify-between px-4 py-2">
             <div class="flex gap-1">
-                <button id="btn-market" class="tab-btn active-tab">LISTED ITEMS</button>
-                <button id="btn-pedidos" class="tab-btn">ORDERS</button>
-                <button id="btn-crafteo" class="tab-btn">CRAFTING</button>
-                <button id="btn-market-live" class="tab-btn">LIVE MARKET</button>
+                <button id="btn-market" class="tab-btn px-4 py-2 text-xs font-bold uppercase tracking-widest transition hover:text-purple-400">MARKET EDITOR</button>
+                <button id="btn-pedidos" class="tab-btn px-4 py-2 text-xs font-bold uppercase tracking-widest transition hover:text-purple-400">ORDERS</button>
+                <button id="btn-crafteo" class="tab-btn px-4 py-2 text-xs font-bold uppercase tracking-widest transition hover:text-purple-400">CRAFTING</button>
+                <button id="btn-market-live" class="tab-btn active-tab px-4 py-2 text-xs font-bold uppercase tracking-widest text-purple-500 border-b-2 border-purple-500">LIVE MARKET</button>
             </div>
-            <div class="text-[10px] text-cyan-400 font-bold tracking-widest hidden md:block">
-                SYSTEM STATUS: ONLINE // CYPX TERMINAL
+            <div class="text-[10px] text-cyan-400 font-bold tracking-widest hidden md:block uppercase">
+                Terminal v3.0 // Connected to Render DB
             </div>
         </div>
     </nav>
 
-    <main class="max-w-6xl mx-auto p-4 md:p-8">
+    <main class="max-w-7xl mx-auto p-4 md:p-8">
 
-        <!-- MARKET TAB -->
-        <div id="tab-market" class="tab-content">
-            <section class="panel-cyber">
-                <h2 class="titulo-cyber">Market Editor</h2>
-                <div class="mb-6 relative">
-                    <input type="text" id="search-input" placeholder="SEARCH ITEM..." 
-                           class="input-cyber w-full">
-                    <span class="absolute right-4 top-3 text-purple-500 opacity-50">_</span>
-                </div>
-                <div id="material-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <!-- Aquí se renderiza el contenido dinámico -->
-                </div>
+        <div id="tab-market" class="tab-content hidden">
+            <section class="bg-gray-900/50 border border-gray-800 rounded-2xl p-6 shadow-2xl">
+                <h2 class="text-xl font-bold text-white mb-6 uppercase tracking-tighter">Market Editor</h2>
+                <div class="mb-6"><input type="text" id="search-input" placeholder="SEARCH ITEM..." class="w-full bg-black/50 border border-gray-700 rounded-lg p-3 outline-none focus:border-purple-500 transition"></div>
+                <div id="material-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             </section>
         </div>
 
-        <!-- PEDIDOS TAB -->
         <div id="tab-pedidos" class="tab-content hidden">
-          <section class="panel-cyber border-yellow-500/50">
-              <h2 class="titulo-cyber text-yellow-500">Analysis & Strategy</h2>
-              
-            <!-- ← Nuevo control aquí -->
-            <div class="mb-6 flex items-center gap-4 flex-wrap">
-                <label class="text-gray-300 font-medium">Precio de pedido deseado:</label>
-                <div class="relative">
-                    <input type="number" id="order-multiplier" min="0" max="200" step="10" value="140"
-                        class="w-28 bg-gray-900 border border-yellow-700 p-2 pr-10 rounded text-right text-yellow-300 outline-none focus:ring-1 ring-yellow-500">
-                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">%</span>
+            <section class="bg-gray-900/50 border border-yellow-500/30 rounded-2xl p-6 shadow-2xl">
+                <h2 class="text-xl font-bold text-yellow-500 mb-6 uppercase tracking-tighter">Analysis & Strategy</h2>
+                <div class="mb-6 flex items-center gap-4 flex-wrap">
+                    <label class="text-gray-400">Precio de pedido:</label>
+                    <div class="relative">
+                        <input type="number" id="order-multiplier" value="140" class="w-24 bg-black border border-yellow-700/50 p-2 rounded text-yellow-500 outline-none">
+                        <span class="absolute right-2 top-2 text-yellow-900">%</span>
+                    </div>
                 </div>
-                <span class="text-[13px] text-gray-500">del precio de compra</span>
-            </div>
-      
-              <div class="overflow-x-auto">
-                  <table class="tabla-cyber">
-                      <thead>
-                          <tr>
-                              <th>Item</th>
-                              <th>Order (x.x)</th>
-                              <th>Market (Net)</th>
-                              <th class="text-center">Action / Target</th>
-                          </tr>
-                      </thead>
-                      <tbody id="pedidos-list"></tbody>
-                  </table>
-              </div>
-          </section>
-      </div>
-
-        <!-- CRAFTEO TAB -->
-        <div id="tab-crafteo" class="tab-content hidden">
-            <section class="panel-cyber border-cyan-500/50">
-                <h2 class="titulo-cyber text-cyan-400">Crafting Profitability</h2>
-                <div id="profit-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Aquí van las cards de rentabilidad -->
-                </div>
+                <div class="overflow-x-auto"><table class="w-full text-left border-collapse"><thead class="text-xs uppercase text-gray-500 border-b border-gray-800"><tr><th class="p-3">Item</th><th class="p-3">Order</th><th class="p-3">Market Net</th><th class="p-3 text-center">Action</th></tr></thead><tbody id="pedidos-list"></tbody></table></div>
             </section>
         </div>
 
-        <!-- TAB MARKET TRAKER -->
-        <div id="tab-market-live" class="tab-content hidden">
-            <section class="panel-cyber border-purple-500/50">
-                <h2 class="titulo-cyber text-purple-400">Market Intelligence & Live Listings</h2>
-                
-                <div id="metrics-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    </div>
-                <p class="text-sm text-gray-400 mb-4">
-                    Listings activos. Las métricas comparan el precio actual vs el promedio de las últimas 24hs.
-                </p>
-        
-                <div class="mb-6 flex flex-wrap gap-4 items-center">
-                    <input type="text" id="market-search" placeholder="Buscar por nombre o ID..." class="input-cyber flex-1 min-w-[200px]">
-                    <button id="btn-refresh-market" class="bg-purple-900 hover:bg-purple-700 px-4 py-2 rounded text-white">Refrescar</button>
-                    <span id="market-status" class="text-gray-400 text-sm"></span>
-                </div>
+        <div id="tab-crafteo" class="tab-content hidden">
+            <section class="bg-gray-900/50 border border-cyan-500/30 rounded-2xl p-6 shadow-2xl">
+                <h2 class="text-xl font-bold text-cyan-400 mb-6 uppercase tracking-tighter">Crafting Profitability</h2>
+                <div id="profit-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            </section>
+        </div>
 
-                <div class="overflow-x-auto max-h-[70vh] border border-purple-900/50 rounded">
-                    <table class="tabla-cyber w-full">
-                        <thead>
-                            <tr>
-                                <th>ID Game</th>
-                                <th>Item</th>
-                                <th>Precio Unit (CYPX)</th>
-                                <th>Cantidad</th>
-                                <th>Fecha Listado</th>
-                                <th>Acción</th>
-                            </tr>
+        <div id="tab-market-live" class="tab-content">
+            <div class="flex flex-col lg:flex-row gap-6 mb-8 mt-4">
+                <div class="lg:w-3/4">
+                    <div class="flex justify-between items-end mb-4">
+                        <div>
+                            <h3 class="text-purple-400 text-[10px] font-black uppercase tracking-[0.3em] mb-1">Market Intelligence</h3>
+                            <p class="text-gray-500 text-[9px] font-mono">Scanning for price anomalies in CyberVerse...</p>
+                        </div>
+                        <div id="market-global-stats" class="hidden md:flex gap-4 border-l border-gray-800 pl-4">
+                            <div class="text-right">
+                                <span class="block text-[8px] text-gray-500 uppercase">24h Volume</span>
+                                <span id="stat-volume" class="text-xs font-mono text-purple-300">---</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="block text-[8px] text-gray-500 uppercase">Alerts</span>
+                                <span class="text-xs font-mono text-green-500">ACTIVE</span>
+                            </div>
+                        </div>
+                    </div>
+            
+                    <div id="metrics-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        </div>
+                </div>
+            
+                <div class="lg:w-1/4">
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="h-2 w-2 rounded-full bg-blue-500 animate-ping"></div>
+                        <h3 class="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em]">Live Sales Feed</h3>
+                    </div>
+                    
+                    <div id="sales-container" class="bg-black/40 border border-blue-500/10 rounded-xl h-[320px] overflow-y-auto custom-scroll relative">
+                        <div class="absolute inset-0 pointer-events-none bg-gradient-to-b from-blue-500/5 via-transparent to-transparent opacity-20"></div>
+                        <div id="sales-list" class="p-2 space-y-2">
+                            </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
+                <div class="flex flex-wrap gap-4 items-center justify-between mb-4">
+                    <input type="text" id="market-search" placeholder="Buscar material..." class="flex-1 min-w-[300px] bg-black border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-purple-500 transition">
+                    <div class="flex items-center gap-4">
+                        <span id="market-status" class="text-[10px] font-mono text-gray-500 uppercase"></span>
+                        <button id="btn-refresh-market" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded font-bold text-xs transition">🔄 ACTUALIZAR</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="text-[10px] text-gray-500 uppercase border-b border-gray-800">
+                            <tr><th class="p-3">ID</th><th class="p-3">Material (Click p/ Historial)</th><th class="p-3">Precio</th><th class="p-3">Stock</th><th class="p-3 text-right">Hora</th></tr>
                         </thead>
-                        <tbody id="market-live-tbody"></tbody>
+                        <tbody id="market-live-tbody" class="divide-y divide-gray-800/50"></tbody>
                     </table>
                 </div>
-                
-                </section>
+            </div>
         </div>
-
     </main>
 
-    <div id="tooltip"></div>
+    <div id="modal-grafico" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-purple-500/50 w-full max-w-5xl p-6 rounded-2xl shadow-2xl relative">
+            <button onclick="document.getElementById('modal-grafico').classList.add('hidden')" class="absolute top-4 right-6 text-gray-500 hover:text-white text-3xl font-light transition">&times;</button>
+            <h3 id="grafico-titulo" class="text-xl font-bold text-white uppercase tracking-tighter mb-6">Historial</h3>
+            <div class="h-[400px]"><canvas id="canvas-monthly-detail"></canvas></div>
+            <p class="text-[10px] text-gray-500 mt-4 italic">* Comparativa del precio mínimo vs promedio diario en los últimos 30 días.</p>
+        </div>
+    </div>
 
+    <div id="tooltip"></div>
     <script type="module" src="js/main.js"></script>
 </body>
 </html>
