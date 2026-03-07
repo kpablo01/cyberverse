@@ -57,5 +57,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Abrir por default
-  switchTab('tab-market');
+  switchTab('tab-market-live');
   });

@@ -189,7 +189,7 @@ app.get('/api/market-live', async (req, res) => {
       LEFT JOIN materiales m ON l.game_id = m.game_id
       -- FILTRO INTELIGENTE: Trae todo lo que se actualizó en la última ráfaga (último minuto)
       WHERE l.snapshot_at >= (SELECT MAX(snapshot_at) FROM market_listings) - INTERVAL '1 minute'
-      AND l.game_id not in (239,237,235,219,284,220,210)
+      AND l.game_id not in (239,237,235,219,284,220,210,178)
       ORDER BY l.listed_at DESC;
     `;
     
@@ -279,12 +279,17 @@ app.get('/api/market-history-monthly/:game_id', async (req, res) => {
 app.get('/api/market-sales-tracker', async (req, res) => {
   try {
     const query = `
-      SELECT m.nombre, COUNT(*) as volumen_vendido, AVG(price) as precio_venta_promedio
+      SELECT 
+        m.nombre, 
+        COUNT(*) as volumen_vendido, 
+        AVG(price) as precio_venta_promedio,
+        MAX(l.snapshot_at) as ultima_venta -- Para saber la hora exacta
       FROM market_listings l
       JOIN materiales m ON l.game_id = m.game_id
       WHERE snapshot_at >= NOW() - INTERVAL '24 hours'
       GROUP BY m.nombre
-      LIMIT 10;
+      ORDER BY ultima_venta DESC -- LO ÚLTIMO ARRIBA
+      LIMIT 20;
     `;
     const result = await pool.query(query);
     res.json(result.rows);
