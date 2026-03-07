@@ -85,21 +85,20 @@
         <!-- TAB MARKET TRAKER -->
         <div id="tab-market-live" class="tab-content hidden">
             <section class="panel-cyber border-purple-500/50">
-                <h2 class="titulo-cyber text-purple-400">Live Market Listings (2026+)</h2>
+                <h2 class="titulo-cyber text-purple-400">Market Intelligence & Live Listings</h2>
+                
+                <div id="metrics-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    </div>
                 <p class="text-sm text-gray-400 mb-4">
-                    Listings activos capturados del Community Market. Solo muestra items a partir de 2026.
-                    Haz clic en "Set Precio" para actualizar el valor de venta en tu base.
+                    Listings activos. Las métricas comparan el precio actual vs el promedio de las últimas 24hs.
                 </p>
         
                 <div class="mb-6 flex flex-wrap gap-4 items-center">
-                    <input type="text" id="market-search" placeholder="Buscar por nombre o ID..." 
-                           class="input-cyber flex-1 min-w-[200px]">
-                        <button id="btn-refresh-market" class="bg-purple-900 hover:bg-purple-700 px-4 py-2 rounded text-white">
-                            Refrescar
-                        </button>
+                    <input type="text" id="market-search" placeholder="Buscar por nombre o ID..." class="input-cyber flex-1 min-w-[200px]">
+                    <button id="btn-refresh-market" class="bg-purple-900 hover:bg-purple-700 px-4 py-2 rounded text-white">Refrescar</button>
                     <span id="market-status" class="text-gray-400 text-sm"></span>
                 </div>
-        
+
                 <div class="overflow-x-auto max-h-[70vh] border border-purple-900/50 rounded">
                     <table class="tabla-cyber w-full">
                         <thead>
@@ -115,7 +114,8 @@
                         <tbody id="market-live-tbody"></tbody>
                     </table>
                 </div>
-            </section>
+                
+                </section>
         </div>
 
     </main>

@@ -5,32 +5,60 @@ let materialesLocales = []; // Para guardar la lista de materiales y vincular
 export async function initMarketLiveTab() {
     const status = document.getElementById('market-status');
     const tbody = document.getElementById('market-live-tbody');
-    const searchInput = document.getElementById('market-search');
+    const metricsContainer = document.getElementById('metrics-container'); // El nuevo div
     const refreshBtn = document.getElementById('btn-refresh-market');
 
-
     const loadData = async () => {
-        status.textContent = 'Sincronizando...';
+        status.textContent = 'Calculando métricas...';
         
         try {
-            // 1. Cargamos materiales locales para el "Selector de Vínculo"
-            const resMats = await fetch('/api/materiales');
-            materialesLocales = await resMats.json();
+            // 1. Cargamos las Métricas (Lo nuevo)
+            const resMetrics = await fetch('/api/market-metrics');
+            const metrics = await resMetrics.json();
+            renderMetrics(metrics);
 
-            // 2. Cargamos el market live
+            // 2. Cargamos el Market Live (Lo que ya tenías)
             const resMarket = await fetch('/api/market-live');
             const data = await resMarket.json();
+            renderRows(data); 
 
-            if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-500">No hay datos recientes</td></tr>';
-                return;
-            }
-
-            renderRows(data);
             status.textContent = `Actualizado: ${new Date().toLocaleTimeString('es-AR')}`;
         } catch (err) {
             status.textContent = 'Error: ' + err.message;
         }
+    };
+
+    // Función para renderizar las cards de métricas
+    const renderMetrics = (metrics) => {
+        if (!metricsContainer) return;
+        
+        // Filtramos solo los que tienen una desviación interesante (ej. bajaron más de un 2%)
+        // o simplemente mostramos los top 4 más baratos respecto a su promedio.
+        metricsContainer.innerHTML = metrics.slice(0, 4).map(m => {
+            const pct = Number(m.desviacion_porcentaje);
+            const colorClass = pct < 0 ? 'text-green-400' : 'text-red-400';
+            const borderClass = pct < -5 ? 'border-green-500 animate-pulse' : 'border-purple-500';
+            const signal = pct < 0 ? 'OFERTA' : 'SUBIDA';
+
+            return `
+                <div class="bg-gray-900/80 border-l-4 ${borderClass} p-3 rounded shadow-lg">
+                    <div class="flex items-center gap-2 mb-2">
+                        <img src="${m.imagen_url}" class="w-6 h-6 object-contain">
+                        <span class="text-[11px] font-bold uppercase tracking-tighter">${m.nombre}</span>
+                    </div>
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <div class="text-xs text-gray-500">Actual</div>
+                            <div class="text-lg font-mono font-bold text-white">${Number(m.current_min_price).toFixed(2)}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] ${colorClass} font-bold">${signal} ${pct.toFixed(1)}%</div>
+                            <div class="text-[9px] text-gray-600">Prom: ${Number(m.avg_price_24h).toFixed(2)}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
     };
 
     const renderRows = (data) => {
