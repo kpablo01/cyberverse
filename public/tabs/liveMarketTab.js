@@ -60,6 +60,7 @@ export async function initMarketLiveTab() {
             `;
         }).join('');
     };
+    
 
     const renderRows = (data) => {
         tbody.innerHTML = data.map(item => {
