@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cyberverse Dashboard | Market & Craft</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="min-h-screen">
 
     <nav class="nav-cyber">
         <div class="max-w-7xl mx-auto flex items-center justify-between px-4">
             <div class="flex gap-1">
-                <button onclick="switchTab('tab-market')" id="btn-market" class="tab-btn active-tab">LISTED ITEMS</button>
-                <button onclick="switchTab('tab-pedidos')" id="btn-pedidos" class="tab-btn">ORDERS 1.4x</button>
-                <button onclick="switchTab('tab-crafteo')" id="btn-crafteo" class="tab-btn">CRAFTING</button>
+                <button id="btn-market" class="tab-btn active-tab">LISTED ITEMS</button>
+                <button id="btn-pedidos" class="tab-btn">ORDERS 1.4x</button>
+                <button id="btn-crafteo" class="tab-btn">CRAFTING</button>
             </div>
             <div class="text-[10px] text-cyan-400 font-bold tracking-widest hidden md:block">
                 SYSTEM STATUS: ONLINE // CYPX TERMINAL
@@ -23,7 +23,8 @@
     </nav>
 
     <main class="max-w-6xl mx-auto p-4 md:p-8">
-        
+
+        <!-- MARKET TAB -->
         <div id="tab-market" class="tab-content">
             <section class="panel-cyber">
                 <h2 class="titulo-cyber">Market Editor</h2>
@@ -33,35 +34,47 @@
                     <span class="absolute right-4 top-3 text-purple-500 opacity-50">_</span>
                 </div>
                 <div id="material-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    </div>
-            </section>
-        </div>
-
-        <div id="tab-pedidos" class="tab-content hidden">
-            <section class="panel-cyber border-yellow-500/50">
-                <h2 class="titulo-cyber text-yellow-500">Analysis & Strategy</h2>
-                <div class="overflow-x-auto">
-                    <table class="tabla-cyber">
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th>Order (1.4x)</th>
-                                <th>Market (Net)</th>
-                                <th class="text-center">Action / Target</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pedidos-list">
-                            </tbody>
-                    </table>
+                    <!-- Aquí se renderiza el contenido dinámico -->
                 </div>
             </section>
         </div>
 
+        <!-- PEDIDOS TAB -->
+        <div id="tab-pedidos" class="tab-content hidden">
+          <section class="panel-cyber border-yellow-500/50">
+              <h2 class="titulo-cyber text-yellow-500">Analysis & Strategy</h2>
+              
+              <!-- ← Nuevo control aquí -->
+              <div class="mb-6 flex items-center gap-4 flex-wrap">
+                  <label class="text-gray-300 font-medium">Multiplier for Orders:</label>
+                  <input type="number" id="order-multiplier" min="0" max="2" step="0.1" value="1.4"
+                         class="w-24 bg-gray-900 border border-yellow-700 p-2 rounded text-right text-yellow-300 outline-none focus:ring-1 ring-yellow-500">
+                  <span class="text-[13px] text-gray-500">× compra price</span>
+              </div>
+      
+              <div class="overflow-x-auto">
+                  <table class="tabla-cyber">
+                      <thead>
+                          <tr>
+                              <th>Item</th>
+                              <th>Order (x.x)</th>
+                              <th>Market (Net)</th>
+                              <th class="text-center">Action / Target</th>
+                          </tr>
+                      </thead>
+                      <tbody id="pedidos-list"></tbody>
+                  </table>
+              </div>
+          </section>
+      </div>
+
+        <!-- CRAFTEO TAB -->
         <div id="tab-crafteo" class="tab-content hidden">
             <section class="panel-cyber border-cyan-500/50">
                 <h2 class="titulo-cyber text-cyan-400">Crafting Profitability</h2>
                 <div id="profit-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    </div>
+                    <!-- Aquí van las cards de rentabilidad -->
+                </div>
             </section>
         </div>
 
@@ -69,6 +82,6 @@
 
     <div id="tooltip"></div>
 
-    <script src="script.js"></script>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
