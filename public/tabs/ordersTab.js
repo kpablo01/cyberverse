@@ -20,12 +20,12 @@ export async function initOrdersTab() {
 
     const getMultiplier = () => {
         if (!multiplierInput) return 1.4;
-        let val = parseFloat(multiplierInput.value);
-        if (isNaN(val)) val = 1.4;
-        // Limitar rango 0 a 2
-        val = Math.max(0, Math.min(2, val));
-        multiplierInput.value = val.toFixed(1); // normalizar visualmente
-        return val;
+        let percent = parseFloat(multiplierInput.value);
+        if (isNaN(percent)) percent = 140;
+        // Limitar rango 0% a 200%
+        percent = Math.max(0, Math.min(200, percent));
+        multiplierInput.value = Math.round(percent); // redondea a entero para que sea más limpio
+        return percent / 100; // devuelve 1.4, 2.0, etc.
     };
 
     const renderTable = () => {

@@ -2,6 +2,7 @@ import { initMarketTab } from '../tabs/marketTab.js';
 import { initOrdersTab } from '../tabs/ordersTab.js';
 import { initCraftingTab } from '../tabs/craftingTab.js';
 import { initTooltip } from '../components/tooltip.js';
+import { initMarketLiveTab } from '../tabs/liveMarketTab.js';
 
 // Globales mínimas (o las podés pasar como parámetro después)
 let allMaterials = [];
@@ -44,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initMarketTab().catch(err => console.error('Market init falló:', err));
   initOrdersTab().catch(err => console.error('Orders init falló:', err));
   initCraftingTab().catch(err => console.error('Crafting init falló:', err));
+  initMarketLiveTab().catch(err => console.error('Live Market init falló:', err));
 
   // Manejo de tabs con event listeners (mejor que onclick inline)
   document.querySelectorAll('.tab-btn').forEach(btn => {

@@ -101,4 +101,163 @@ app.put('/api/materiales/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// 6. UPDATE PRECIO MARKET
+app.post('/api/update-market-snapshot', async (req, res) => {
+  const listings = req.body.ls || [];
+  const cutoffDate = new Date('2026-01-01T00:00:00Z');
+
+  const validListings = listings.filter(l => 
+    l.id && l.price && l.amount && 
+    typeof l.date === 'number' && 
+    new Date(l.date) >= cutoffDate
+  );
+
+  if (validListings.length === 0) {
+    return res.json({ success: true, processed: 0, message: 'Nada válido para procesar' });
+  }
+
+  const gameIds = validListings.map(l => parseInt(l.id));
+  const prices = validListings.map(l => parseFloat(l.price));
+  const amounts = validListings.map(l => parseFloat(l.amount));
+  const dates = validListings.map(l => new Date(l.date));
+
+  const client = await pool.connect(); // Usamos un cliente para asegurar que ambas tareas se completen
+
+  try {
+    await client.query('BEGIN'); // Iniciamos transacción
+
+    // 1. Insertamos o Actualizamos los listings en market_listings
+    const insertQuery = `
+      INSERT INTO market_listings (game_id, price, amount, listed_at, snapshot_at)
+      SELECT * FROM UNNEST($1::int[], $2::numeric[], $3::numeric[], $4::timestamptz[], array_fill(NOW(), ARRAY[cardinality($1)]))
+      ON CONFLICT (listed_at) 
+      DO UPDATE SET 
+        price = EXCLUDED.price,
+        amount = EXCLUDED.amount,
+        game_id = EXCLUDED.game_id,
+        snapshot_at = NOW();
+    `;
+    await client.query(insertQuery, [gameIds, prices, amounts, dates]);
+
+    // 2. ACTUALIZACIÓN AUTOMÁTICA: 
+    // Sincronizamos la tabla materiales con el precio más bajo de la ráfaga actual
+    const syncQuery = `
+      UPDATE materiales m
+      SET venta = subquery.min_price
+      FROM (
+        SELECT game_id, MIN(price) as min_price
+        FROM market_listings
+        WHERE snapshot_at >= NOW() - INTERVAL '1 minute'
+        AND game_id = ANY($1::int[]) -- Solo actualizamos los IDs que vinieron en este lote
+        GROUP BY game_id
+      ) AS subquery
+      WHERE m.game_id = subquery.game_id;
+    `;
+    const syncResult = await client.query(syncQuery, [gameIds]);
+
+    await client.query('COMMIT'); // Guardamos todo
+
+    res.json({
+      success: true,
+      processed: validListings.length,
+      updated_materials: syncResult.rowCount,
+      message: 'Snapshot guardado y precios actualizados automáticamente'
+    });
+
+  } catch (err) {
+    await client.query('ROLLBACK'); // Si algo falla, no se rompe nada
+    console.error('Error en proceso automático:', err);
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    client.release(); // Devolvemos el cliente al pool
+  }
+});
+
+app.get('/api/market-live', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        l.game_id,
+        m.id AS local_id,
+        m.nombre,
+        m.imagen_url,
+        l.price,
+        l.amount,
+        l.listed_at,
+        l.snapshot_at
+      FROM market_listings l
+      LEFT JOIN materiales m ON l.game_id = m.game_id
+      -- FILTRO INTELIGENTE: Trae todo lo que se actualizó en la última ráfaga (último minuto)
+      WHERE l.snapshot_at >= (SELECT MAX(snapshot_at) FROM market_listings) - INTERVAL '1 minute'
+      AND l.game_id not in (239,237,235,219,284,220,210)
+      ORDER BY l.listed_at DESC;
+    `;
+    
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error en /api/market-live:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Vincular un game_id a un material existente
+app.put('/api/materiales/link-game-id/:id', async (req, res) => {
+  try {
+    const { game_id } = req.body;
+    // Validamos que vengan ambos datos
+    if (!game_id || !req.params.id) {
+        return res.status(400).json({ error: 'Faltan datos (game_id o id)' });
+    }
+    
+    await pool.query('UPDATE materiales SET game_id = $1 WHERE id = $2', [game_id, req.params.id]);
+    res.json({ success: true, message: 'Vínculo actualizado' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/market-metrics', async (req, res) => {
+  try {
+    const query = `
+      WITH stats_24h AS (
+        SELECT 
+          game_id, 
+          AVG(price) as avg_price_24h,
+          MIN(price) as min_price_24h,
+          MAX(price) as max_price_24h
+        FROM market_listings
+        WHERE snapshot_at >= NOW() - INTERVAL '24 hours'
+        GROUP BY game_id
+      ),
+      current_market AS (
+        SELECT 
+          game_id, 
+          MIN(price) as current_min_price
+        FROM market_listings
+        WHERE snapshot_at >= (SELECT MAX(snapshot_at) FROM market_listings) - INTERVAL '1 minute'
+        GROUP BY game_id
+      )
+      SELECT 
+        m.nombre,
+        m.imagen_url,
+        c.current_min_price,
+        s.avg_price_24h,
+        s.min_price_24h,
+        s.max_price_24h,
+        ((c.current_min_price - s.avg_price_24h) / s.avg_price_24h) * 100 as desviacion_porcentaje
+      FROM current_market c
+      JOIN stats_24h s ON c.game_id = s.game_id
+      JOIN materiales m ON c.game_id = m.game_id
+      ORDER BY desviacion_porcentaje ASC; -- Los más "baratos" respecto a su promedio primero
+    `;
+    
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(3000, () => console.log('Cyberverse Server: OK en puerto 3000'));

@@ -13,8 +13,9 @@
         <div class="max-w-7xl mx-auto flex items-center justify-between px-4">
             <div class="flex gap-1">
                 <button id="btn-market" class="tab-btn active-tab">LISTED ITEMS</button>
-                <button id="btn-pedidos" class="tab-btn">ORDERS 1.4x</button>
+                <button id="btn-pedidos" class="tab-btn">ORDERS</button>
                 <button id="btn-crafteo" class="tab-btn">CRAFTING</button>
+                <button id="btn-market-live" class="tab-btn">LIVE MARKET</button>
             </div>
             <div class="text-[10px] text-cyan-400 font-bold tracking-widest hidden md:block">
                 SYSTEM STATUS: ONLINE // CYPX TERMINAL
@@ -44,13 +45,16 @@
           <section class="panel-cyber border-yellow-500/50">
               <h2 class="titulo-cyber text-yellow-500">Analysis & Strategy</h2>
               
-              <!-- ← Nuevo control aquí -->
-              <div class="mb-6 flex items-center gap-4 flex-wrap">
-                  <label class="text-gray-300 font-medium">Multiplier for Orders:</label>
-                  <input type="number" id="order-multiplier" min="0" max="2" step="0.1" value="1.4"
-                         class="w-24 bg-gray-900 border border-yellow-700 p-2 rounded text-right text-yellow-300 outline-none focus:ring-1 ring-yellow-500">
-                  <span class="text-[13px] text-gray-500">× compra price</span>
-              </div>
+            <!-- ← Nuevo control aquí -->
+            <div class="mb-6 flex items-center gap-4 flex-wrap">
+                <label class="text-gray-300 font-medium">Precio de pedido deseado:</label>
+                <div class="relative">
+                    <input type="number" id="order-multiplier" min="0" max="200" step="10" value="140"
+                        class="w-28 bg-gray-900 border border-yellow-700 p-2 pr-10 rounded text-right text-yellow-300 outline-none focus:ring-1 ring-yellow-500">
+                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">%</span>
+                </div>
+                <span class="text-[13px] text-gray-500">del precio de compra</span>
+            </div>
       
               <div class="overflow-x-auto">
                   <table class="tabla-cyber">
@@ -74,6 +78,42 @@
                 <h2 class="titulo-cyber text-cyan-400">Crafting Profitability</h2>
                 <div id="profit-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <!-- Aquí van las cards de rentabilidad -->
+                </div>
+            </section>
+        </div>
+
+        <!-- TAB MARKET TRAKER -->
+        <div id="tab-market-live" class="tab-content hidden">
+            <section class="panel-cyber border-purple-500/50">
+                <h2 class="titulo-cyber text-purple-400">Live Market Listings (2026+)</h2>
+                <p class="text-sm text-gray-400 mb-4">
+                    Listings activos capturados del Community Market. Solo muestra items a partir de 2026.
+                    Haz clic en "Set Precio" para actualizar el valor de venta en tu base.
+                </p>
+        
+                <div class="mb-6 flex flex-wrap gap-4 items-center">
+                    <input type="text" id="market-search" placeholder="Buscar por nombre o ID..." 
+                           class="input-cyber flex-1 min-w-[200px]">
+                        <button id="btn-refresh-market" class="bg-purple-900 hover:bg-purple-700 px-4 py-2 rounded text-white">
+                            Refrescar
+                        </button>
+                    <span id="market-status" class="text-gray-400 text-sm"></span>
+                </div>
+        
+                <div class="overflow-x-auto max-h-[70vh] border border-purple-900/50 rounded">
+                    <table class="tabla-cyber w-full">
+                        <thead>
+                            <tr>
+                                <th>ID Game</th>
+                                <th>Item</th>
+                                <th>Precio Unit (CYPX)</th>
+                                <th>Cantidad</th>
+                                <th>Fecha Listado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="market-live-tbody"></tbody>
+                    </table>
                 </div>
             </section>
         </div>
