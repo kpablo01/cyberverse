@@ -52,6 +52,7 @@ export async function initMarketLiveTab(config = { mode: 'read' }) {
     const renderSalesData = (sales) => {
         const salesContainer = document.getElementById('sales-list') || elements.sales;
         if (!salesContainer) return;
+        
         if (sales.length === 0) {
             salesContainer.innerHTML = `<div class="text-center text-gray-600 text-[10px] py-20 italic">No incoming data...</div>`;
             return;
@@ -60,28 +61,35 @@ export async function initMarketLiveTab(config = { mode: 'read' }) {
         salesContainer.innerHTML = sales.map(s => {
             const precio = Number(s.precio_venta) || 0;
             const cantidad = Number(s.volumen_vendido) || 0;
-            const totalVenta = (cantidad * precio).toFixed(2);
+            const totalVenta = (cantidad * precio).toFixed(0);
             
             const fechaObj = s.ultima_venta ? new Date(s.ultima_venta) : null;
             const horaVenta = fechaObj 
                 ? fechaObj.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) 
                 : '--/-- --:--';
     
-            const isBigSale = Number(totalVenta) > 500;
+            // LÓGICA DE WHALE: Venta > 2500 CYPX
+            const isWhale = Number(totalVenta) > 2500;
+            const containerClass = isWhale 
+                ? 'border-purple-500 bg-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.3)] animate-pulse border-l-4' 
+                : 'border-cyan-500/30 bg-gray-900/40 border-l-2';
     
             return `
-                <div class="group border-l-4 ${isBigSale ? 'border-orange-500 bg-orange-500/10' : 'border-cyan-500/30 bg-gray-900/80'} p-3 rounded-r-lg mb-2">
-                    <div class="flex justify-between items-start mb-1">
-                        <span class="text-[9px] font-mono ${isBigSale ? 'text-orange-400' : 'text-cyan-400'} font-black">
-                            ${isBigSale ? '🔥 ' : ''}TOTAL: ${totalVenta} CYPX
-                        </span>
-                        <span class="text-[9px] text-gray-400 font-mono italic">${horaVenta}hs</span>
+                <div class="group ${containerClass} p-2 rounded-r-lg mb-2 flex items-center gap-3 transition-all">
+                    <div class="relative flex-shrink-0">
+                        <img src="${s.imagen_url}" class="w-8 h-8 object-contain ${isWhale ? 'scale-110' : 'opacity-80'} group-hover:opacity-100 transition">
+                        ${isWhale ? '<span class="absolute -top-2 -left-2 text-[10px] drop-shadow-md">🐋</span>' : ''}
                     </div>
-                    <div class="flex justify-between items-center">
-                        <div class="text-[11px] text-gray-100 font-bold">${s.nombre}</div>
-                        <div class="flex flex-col items-end">
-                            <div class="text-xs text-white font-mono font-black">x${cantidad}</div>
-                            <div class="text-[8px] text-gray-500 font-mono">$${precio} c/u</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-start mb-0.5">
+                            <span class="text-[9px] font-mono ${isWhale ? 'text-purple-400 font-black' : 'text-cyan-400 font-bold'}">
+                                ${isWhale ? 'WHALE: ' : ''}${totalVenta} CYPX
+                            </span>
+                            <span class="text-[8px] text-gray-500 font-mono">${horaVenta}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div class="text-[10px] text-gray-100 font-bold truncate pr-1">${s.nombre}</div>
+                            <div class="text-[10px] text-white font-mono bg-black/40 px-1 rounded">x${cantidad}</div>
                         </div>
                     </div>
                 </div>`;
@@ -89,44 +97,63 @@ export async function initMarketLiveTab(config = { mode: 'read' }) {
     };
     
     // --- RENDERIZADO DE FILAS ---
-    const renderRows = (data) => {
+    const renderRows = (data, liquidityData = []) => {
         if (!elements.tbody) return;
+        
         elements.tbody.innerHTML = data.map(item => {
-            const hora = new Date(item.listed_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+            const fechaFull = new Date(item.listed_at).toLocaleString('es-AR', { 
+                day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
+            });
             const precio = Number(item.price).toFixed(2);
             
+            // LÓGICA DE LIQUIDEZ
+            const liq = liquidityData.find(l => l.game_id === item.game_id);
+            let liqHTML = '';
+            
+            if (liq) {
+                const min = Math.round(liq.minutos_desde_ultima);
+                const color = min < 15 ? 'text-green-400' : (min < 60 ? 'text-yellow-500' : 'text-gray-600');
+                const label = min < 1 ? 'RECIÉN' : `${min}m`;
+                liqHTML = `<span class="${color} text-[9px] font-black tracking-tighter">[🔥 ${label}]</span>`;
+            } else {
+                liqHTML = `<span class="text-gray-800 text-[9px] font-mono">[STALE]</span>`;
+            }
+    
             if (item.nombre) {
                 return `
                 <tr class="hover:bg-white/5 transition border-b border-gray-800/50 group">
                     <td class="p-3 font-mono text-cyan-700 text-[10px]">${item.game_id}</td>
-                    <td class="p-3 text-sm text-gray-200 cursor-pointer hover:text-purple-400 font-bold" 
-                        onclick="verHistorialMensual(${item.game_id}, '${item.nombre}')">
+                    <td class="p-3 cursor-pointer group-hover:bg-white/[0.02]" onclick="verHistorialMensual(${item.game_id}, '${item.nombre}')">
                         <div class="flex items-center gap-2">
-                            <img src="${item.imagen_url}" class="w-5 h-5">
-                            ${item.nombre}
+                            <img src="${item.imagen_url}" class="w-6 h-6 object-contain">
+                            <div class="flex flex-col leading-tight">
+                                <span class="text-sm text-gray-200 font-bold group-hover:text-purple-400 transition">${item.nombre}</span>
+                                ${liqHTML}
+                            </div>
                         </div>
                     </td>
-                    <td class="p-3 font-mono text-green-400 font-bold">${precio}</td>
-                    <td class="p-3 text-xs text-gray-500">${item.amount}</td>
-                    <td class="p-3 text-[10px] text-gray-600 text-right">${hora}</td>
+                    <td class="p-3 font-mono text-green-400 font-bold text-base">${precio}</td>
+                    <td class="p-3 text-xs text-gray-500 font-mono">vol: ${item.amount}</td>
+                    <td class="p-3 text-[10px] text-gray-600 text-right font-mono">${fechaFull}</td>
                 </tr>`;
             } 
-
+    
+            // Caso: Ítem no vinculado (Admin mode)
             const selector = isAdmin ? `
                 <select onchange="vincularGameID(${item.game_id}, this.value)" 
-                        class="bg-black text-[10px] border border-red-500/30 rounded p-1 w-full text-red-200 outline-none">
+                        class="bg-black text-[9px] border border-red-500/30 rounded p-1 w-full text-red-200 outline-none">
                     <option value="">❓ VINCULAR...</option>
                     ${materialesLocales.map(m => `<option value="${m.id}">${m.nombre}</option>`).join('')}
                 </select>
-            ` : `<span class="text-[10px] text-red-900 font-black uppercase">UNKNOWN ID</span>`;
-
+            ` : `<span class="text-[9px] text-red-900 font-black">UNKNOWN_ID</span>`;
+    
             return `
-            <tr class="bg-red-500/5 border-b border-red-900/20">
-                <td class="p-3 font-mono text-red-500 text-[10px] font-bold">${item.game_id}</td>
+            <tr class="bg-red-500/5 border-b border-red-900/20 opacity-70">
+                <td class="p-3 font-mono text-red-500 text-[10px]">${item.game_id}</td>
                 <td class="p-3">${selector}</td>
                 <td class="p-3 font-mono text-red-400/80 font-bold">${precio}</td>
                 <td class="p-3 text-xs text-red-300/50">${item.amount}</td>
-                <td class="p-3 text-[10px] text-red-900 text-right">${hora}</td>
+                <td class="p-3 text-[10px] text-gray-800 text-right font-mono">${fechaFull}</td>
             </tr>`;
         }).join('');
     };
@@ -135,18 +162,19 @@ export async function initMarketLiveTab(config = { mode: 'read' }) {
     const loadData = async () => {
         if (elements.status) elements.status.textContent = 'SYNCING...';
         try {
-            const [resMats, resMetrics, resMarket, resSales] = await Promise.all([
+            const [resMats, resMetrics, resMarket, resSales, resLiq] = await Promise.all([
                 fetch('/api/materiales').then(r => r.json()),
                 fetch('/api/market-metrics').then(r => r.json()),
                 fetch('/api/market-live').then(r => r.json()),
-                fetch('/api/market-sales-tracker').then(r => r.json())
+                fetch('/api/market-sales-tracker').then(r => r.json()),
+                fetch('/api/market-liquidity').then(r => r.json())
             ]);
 
             materialesLocales = resMats;
             marketDataFull = resMarket;
 
             renderMetrics(resMetrics);
-            renderRows(resMarket);
+            renderRows(resMarket, resLiq);
             renderSalesData(resSales);
 
             if (elements.status) elements.status.textContent = `LIVE | ${new Date().toLocaleTimeString('es-AR')}`;

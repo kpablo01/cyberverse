@@ -106,70 +106,62 @@ app.post('/api/update-market-snapshot', async (req, res) => {
   const listings = req.body.ls || [];
   const cutoffDate = new Date('2026-01-01T00:00:00Z');
 
+  // Filtramos en JS antes de mandar a la DB para no procesar de más
   const validListings = listings.filter(l => 
     l.id && l.price && l.amount && 
-    typeof l.date === 'number' && 
     new Date(l.date) >= cutoffDate
   );
 
-  if (validListings.length === 0) {
-    return res.json({ success: true, processed: 0, message: 'Nada válido para procesar' });
-  }
+  if (validListings.length === 0) return res.json({ success: true, processed: 0 });
 
-  const gameIds = validListings.map(l => parseInt(l.id));
-  const prices = validListings.map(l => parseFloat(l.price));
-  const amounts = validListings.map(l => parseFloat(l.amount));
-  const dates = validListings.map(l => new Date(l.date));
-
-  const client = await pool.connect(); // Usamos un cliente para asegurar que ambas tareas se completen
-
+  const client = await pool.connect();
   try {
-    await client.query('BEGIN'); // Iniciamos transacción
+    await client.query('BEGIN');
 
-    // 1. Insertamos o Actualizamos los listings en market_listings
-    const insertQuery = `
-      INSERT INTO market_listings (game_id, price, amount, listed_at, snapshot_at)
-      SELECT * FROM UNNEST($1::int[], $2::numeric[], $3::numeric[], $4::timestamptz[], array_fill(NOW(), ARRAY[cardinality($1)]))
-      ON CONFLICT (listed_at) 
-      DO UPDATE SET 
-        price = EXCLUDED.price,
-        amount = EXCLUDED.amount,
-        game_id = EXCLUDED.game_id,
-        snapshot_at = NOW();
+    const gameIds = validListings.map(l => parseInt(l.id));
+    const prices = validListings.map(l => parseFloat(l.price));
+    const amounts = validListings.map(l => parseFloat(l.amount));
+    const dates = validListings.map(l => new Date(l.date));
+
+    // 1. DETECTAR VENTAS (Solo de órdenes de 2026)
+    const detectSalesQuery = `
+      INSERT INTO ventas_detectadas (game_id, cantidad, precio, total_cypx)
+      SELECT 
+          input.game_id, 
+          (m.amount - input.amount), 
+          input.price, 
+          ((m.amount - input.amount) * input.price)
+      FROM UNNEST($1::int[], $2::numeric[], $3::numeric[], $4::timestamptz[]) 
+           AS input(game_id, price, amount, listed_at)
+      JOIN market_listings m ON m.game_id = input.game_id AND m.listed_at = input.listed_at
+      WHERE m.amount > input.amount 
+      AND input.listed_at >= '2026-01-01T00:00:00Z';
     `;
-    await client.query(insertQuery, [gameIds, prices, amounts, dates]);
+    await client.query(detectSalesQuery, [gameIds, prices, amounts, dates]);
 
-    // 2. ACTUALIZACIÓN AUTOMÁTICA: 
-    // Sincronizamos la tabla materiales con el precio más bajo de la ráfaga actual
-    const syncQuery = `
+    // 2. REEMPLAZAR SNAPSHOT
+    await client.query('DELETE FROM market_listings');
+    await client.query(`
+      INSERT INTO market_listings (game_id, price, amount, listed_at, snapshot_at)
+      SELECT * FROM UNNEST($1::int[], $2::numeric[], $3::numeric[], $4::timestamptz[], 
+                          array_fill(NOW(), ARRAY[cardinality($1)]))
+    `, [gameIds, prices, amounts, dates]);
+
+    // 3. SYNC PRECIOS
+    await client.query(`
       UPDATE materiales m
       SET venta = subquery.min_price
-      FROM (
-        SELECT game_id, MIN(price) as min_price
-        FROM market_listings
-        WHERE snapshot_at >= NOW() - INTERVAL '1 minute'
-        AND game_id = ANY($1::int[]) -- Solo actualizamos los IDs que vinieron en este lote
-        GROUP BY game_id
-      ) AS subquery
+      FROM (SELECT game_id, MIN(price) as min_price FROM market_listings GROUP BY game_id) AS subquery
       WHERE m.game_id = subquery.game_id;
-    `;
-    const syncResult = await client.query(syncQuery, [gameIds]);
+    `);
 
-    await client.query('COMMIT'); // Guardamos todo
-
-    res.json({
-      success: true,
-      processed: validListings.length,
-      updated_materials: syncResult.rowCount,
-      message: 'Snapshot guardado y precios actualizados automáticamente'
-    });
-
+    await client.query('COMMIT');
+    res.json({ success: true, processed: validListings.length });
   } catch (err) {
-    await client.query('ROLLBACK'); // Si algo falla, no se rompe nada
-    console.error('Error en proceso automático:', err);
-    res.status(500).json({ success: false, error: err.message });
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
   } finally {
-    client.release(); // Devolvemos el cliente al pool
+    client.release();
   }
 });
 
@@ -281,21 +273,33 @@ app.get('/api/market-sales-tracker', async (req, res) => {
     const query = `
       SELECT 
         m.nombre, 
-        l.amount as volumen_vendido, -- El monto real de esa venta
-        l.price as precio_venta,    -- El precio real de esa venta
-        l.snapshot_at as ultima_venta
-      FROM market_listings l
-      JOIN materiales m ON l.game_id = m.game_id
-      WHERE l.snapshot_at >= NOW() - INTERVAL '24 hours'
-      ORDER BY l.snapshot_at DESC -- Trae lo más nuevo primero
-      LIMIT 30; -- Mostramos las últimas 30 ventas reales
+        m.imagen_url, -- Agregamos la imagen
+        v.cantidad as volumen_vendido, 
+        v.precio as precio_venta,
+        v.fecha_deteccion as ultima_venta
+      FROM ventas_detectadas v
+      JOIN materiales m ON v.game_id = m.game_id
+      ORDER BY v.fecha_deteccion DESC
+      LIMIT 10;
     `;
     const result = await pool.query(query);
     res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json([]);
-  }
+  } catch (err) { res.status(500).json([]); }
+});
+
+app.get('/api/market-liquidity', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        game_id, 
+        MAX(fecha_deteccion) as ultima_venta_at,
+        EXTRACT(EPOCH FROM (NOW() - MAX(fecha_deteccion))) / 60 as minutos_desde_ultima
+      FROM ventas_detectadas
+      GROUP BY game_id;
+    `;
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) { res.status(500).json([]); }
 });
 
 app.listen(3000, () => console.log('Cyberverse Server: OK en puerto 3000'));
