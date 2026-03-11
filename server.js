@@ -213,46 +213,69 @@ app.put('/api/materiales/link-game-id/:id', async (req, res) => {
 app.get('/api/market-metrics', async (req, res) => {
   try {
     const query = `
-      WITH stats_24h AS (
-        SELECT 
-          game_id, 
-          AVG(price) as avg_price_24h,
-          MIN(price) as min_price_24h,
-          SUM(amount) as total_volume_24h,
-          COUNT(*) as listings_count_24h
+      WITH latest_snapshot AS (
+        SELECT MAX(snapshot_at) AS latest_ts 
         FROM market_listings
-        WHERE snapshot_at >= NOW() - INTERVAL '24 hours'
-        GROUP BY game_id
       ),
       current_market AS (
         SELECT 
-          game_id, 
-          MIN(price) as current_min_price,
-          SUM(amount) as current_total_supply
+          game_id,
+          MIN(price)              AS current_min_price,
+          AVG(price)              AS current_avg_price,
+          SUM(amount)             AS current_total_supply,
+          COUNT(*)                AS current_active_listings
         FROM market_listings
-        WHERE snapshot_at >= (SELECT MAX(snapshot_at) FROM market_listings) - INTERVAL '1 minute'
+        WHERE snapshot_at >= (SELECT latest_ts FROM latest_snapshot) - INTERVAL '4 hours'
+          AND listed_at >= NOW() - INTERVAL '30 days'
         GROUP BY game_id
+        HAVING COUNT(*) > 0
+      ),
+      ventas_24h AS (
+        SELECT 
+          game_id,
+          SUM(cantidad)                 AS volume_units_24h,
+          SUM(total_cypx)               AS volume_cypx_24h,
+          AVG(precio)                   AS avg_sale_price_24h,
+          MIN(precio)                   AS min_sale_price_24h,
+          COUNT(*)                      AS sales_count_24h
+        FROM ventas_detectadas
+        WHERE fecha_deteccion >= NOW() - INTERVAL '24 hours'
+        GROUP BY game_id
+        HAVING SUM(cantidad) > 0
       )
       SELECT 
         m.nombre,
         m.imagen_url,
-        c.current_min_price,
-        c.current_total_supply,
-        s.avg_price_24h,
-        s.min_price_24h,
-        s.total_volume_24h,
-        s.listings_count_24h,
-        ((c.current_min_price - s.avg_price_24h) / s.avg_price_24h) * 100 as desviacion_porcentaje
+        c.game_id,
+        ROUND(c.current_min_price, 2)           AS current_min_price,
+        ROUND(c.current_avg_price, 2)           AS current_avg_price,
+        ROUND(c.current_total_supply)::bigint   AS current_total_supply,
+        c.current_active_listings,
+        ROUND(COALESCE(v.avg_sale_price_24h, c.current_avg_price), 2) AS avg_price_24h,
+        ROUND(v.min_sale_price_24h, 2)          AS min_sale_price_24h,
+        COALESCE(v.volume_cypx_24h, 0)::bigint  AS volume_cypx_24h,
+        COALESCE(v.volume_units_24h, 0)         AS volume_units_24h,
+        COALESCE(v.sales_count_24h, 0)          AS sales_count_24h,
+        ROUND(
+          CASE 
+            WHEN COALESCE(v.avg_sale_price_24h, 0) > 0 
+            THEN ((c.current_min_price - v.avg_sale_price_24h) / v.avg_sale_price_24h) * 100
+            ELSE 0
+          END, 2
+        ) AS desviacion_porcentaje
       FROM current_market c
-      JOIN stats_24h s ON c.game_id = s.game_id
+      LEFT JOIN ventas_24h v ON c.game_id = v.game_id
       JOIN materiales m ON c.game_id = m.game_id
-      ORDER BY desviacion_porcentaje ASC;
+      WHERE c.current_active_listings > 0
+      ORDER BY desviacion_porcentaje ASC
+      LIMIT 60;
     `;
-    
+
     const result = await pool.query(query);
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error en /api/market-metrics:', err);
+    res.status(500).json({ error: 'Error al obtener métricas de mercado' });
   }
 });
 

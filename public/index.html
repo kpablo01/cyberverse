@@ -56,8 +56,9 @@
         </div>
 
         <div id="tab-market-live" class="tab-content">
-            <div class="flex flex-col lg:flex-row gap-6 mb-8 mt-4">
-                <div class="lg:w-3/4">
+            <div class="grid lg:grid-cols-4 gap-6 mb-8 mt-4">
+                <!-- Columna izquierda: Market Intelligence (3/4) -->
+                <div class="lg:col-span-3 flex flex-col">
                     <div class="flex justify-between items-end mb-4">
                         <div>
                             <h3 class="text-purple-400 text-[10px] font-black uppercase tracking-[0.3em] mb-1">Market Intelligence</h3>
@@ -76,19 +77,26 @@
                     </div>
             
                     <div id="metrics-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        </div>
+                        <!-- Acá van las tarjetas generadas por JS -->
+                    </div>
                 </div>
             
-                <div class="lg:w-1/4">
-                    <div class="flex items-center gap-2 mb-4">
-                        <div class="h-2 w-2 rounded-full bg-blue-500 animate-ping"></div>
-                        <h3 class="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em]">Live Sales Feed</h3>
+                <!-- Columna derecha: Live Sales Feed (1/4) - con altura controlada -->
+                <div class="lg:col-span-1 flex flex-col">
+                    <div class="flex items-center justify-between gap-2 mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 rounded-full bg-blue-500 animate-ping"></div>
+                            <h3 class="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em]">Live Sales Feed</h3>
+                        </div>
                     </div>
-                    
-                    <div id="sales-container" class="bg-black/40 border border-blue-500/10 rounded-xl h-[320px] overflow-y-auto custom-scroll relative">
-                        <div class="absolute inset-0 pointer-events-none bg-gradient-to-b from-blue-500/5 via-transparent to-transparent opacity-20"></div>
-                        <div id="sales-list" class="p-2 space-y-2">
-                            </div>
+            
+                    <div id="sales-container" 
+                         class="bg-black/40 border border-blue-500/10 rounded-xl flex-1 overflow-hidden relative flex flex-col min-h-[280px] max-h-[620px] lg:max-h-[calc(75vh-200px)]">
+                        <div class="absolute inset-0 pointer-events-none bg-gradient-to-b from-blue-500/5 via-transparent to-transparent opacity-20 z-0"></div>
+                        
+                        <div id="sales-list" class="p-3 space-y-2.5 overflow-y-auto flex-1 custom-scroll z-10">
+                            <!-- Acá van las ventas generadas por JS -->
+                        </div>
                     </div>
                 </div>
             </div>
