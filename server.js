@@ -225,57 +225,93 @@ app.get('/api/market-metrics', async (req, res) => {
           SUM(amount)             AS current_total_supply,
           COUNT(*)                AS current_active_listings
         FROM market_listings
-        WHERE snapshot_at >= (SELECT latest_ts FROM latest_snapshot) - INTERVAL '4 hours'
+        WHERE snapshot_at >= (SELECT latest_ts FROM latest_snapshot) - INTERVAL '6 hours'
           AND listed_at >= NOW() - INTERVAL '30 days'
         GROUP BY game_id
-        HAVING COUNT(*) > 0
+        HAVING COUNT(*) >= 3
+           AND SUM(amount) >= 20
       ),
-      ventas_24h AS (
+      ventas_recent AS (
         SELECT 
           game_id,
-          SUM(cantidad)                 AS volume_units_24h,
-          SUM(total_cypx)               AS volume_cypx_24h,
-          AVG(precio)                   AS avg_sale_price_24h,
-          MIN(precio)                   AS min_sale_price_24h,
-          COUNT(*)                      AS sales_count_24h
+          SUM(cantidad)                                   AS volume_units_recent,
+          SUM(total_cypx)                                 AS volume_cypx_recent,
+          ROUND(SUM(total_cypx)::numeric / NULLIF(SUM(cantidad), 0), 2) AS avg_price_recent,
+          MIN(precio)                                     AS min_price_recent,
+          MAX(precio)                                     AS max_price_recent,
+          COUNT(*)                                        AS sales_count_recent
         FROM ventas_detectadas
-        WHERE fecha_deteccion >= NOW() - INTERVAL '24 hours'
+        WHERE fecha_deteccion >= NOW() - INTERVAL '7 days'
         GROUP BY game_id
-        HAVING SUM(cantidad) > 0
+        HAVING COUNT(*) >= 2
+           AND SUM(total_cypx) >= 500
+      ),
+      last_sale AS (
+        SELECT 
+          game_id,
+          precio           AS last_sale_price,
+          fecha_deteccion  AS last_sale_date
+        FROM (
+          SELECT 
+            game_id,
+            precio,
+            fecha_deteccion,
+            ROW_NUMBER() OVER (PARTITION BY game_id ORDER BY fecha_deteccion DESC) AS rn
+          FROM ventas_detectadas
+        ) ranked
+        WHERE rn = 1
+      ),
+      metrics AS (  -- ← CTE nueva para poder usar los aliases en ORDER BY
+        SELECT 
+          m.nombre,
+          m.imagen_url,
+          c.game_id,
+          ROUND(c.current_min_price, 2)           AS current_min_price,
+          ROUND(c.current_avg_price, 2)           AS current_avg_price,
+          ROUND(c.current_total_supply)::bigint   AS current_total_supply,
+          c.current_active_listings,
+          v.avg_price_recent,
+          v.min_price_recent,
+          v.max_price_recent,
+          COALESCE(v.volume_cypx_recent, 0)::bigint  AS volume_cypx_recent,
+          COALESCE(v.volume_units_recent, 0)         AS volume_units_recent,
+          COALESCE(v.sales_count_recent, 0)          AS sales_count_recent,
+          ROUND(l.last_sale_price, 2)                AS last_sale_price,
+          l.last_sale_date,
+          ROUND(
+            CASE WHEN COALESCE(v.avg_price_recent, 0) > 0 
+                 THEN ((c.current_min_price - v.avg_price_recent) / v.avg_price_recent) * 100
+                 ELSE 0 END, 2
+          ) AS desviacion_vs_promedio,
+          ROUND(
+            CASE WHEN COALESCE(l.last_sale_price, 0) > 0 
+                 THEN ((c.current_min_price - l.last_sale_price) / l.last_sale_price) * 100
+                 ELSE 0 END, 2
+          ) AS desviacion_vs_ultima
+        FROM current_market c
+        LEFT JOIN ventas_recent v ON c.game_id = v.game_id
+        LEFT JOIN last_sale l ON c.game_id = l.game_id
+        JOIN materiales m ON c.game_id = m.game_id
+        WHERE c.current_active_listings > 0
+          AND COALESCE(v.sales_count_recent, 0) >= 4
       )
-      SELECT 
-        m.nombre,
-        m.imagen_url,
-        c.game_id,
-        ROUND(c.current_min_price, 2)           AS current_min_price,
-        ROUND(c.current_avg_price, 2)           AS current_avg_price,
-        ROUND(c.current_total_supply)::bigint   AS current_total_supply,
-        c.current_active_listings,
-        ROUND(COALESCE(v.avg_sale_price_24h, c.current_avg_price), 2) AS avg_price_24h,
-        ROUND(v.min_sale_price_24h, 2)          AS min_sale_price_24h,
-        COALESCE(v.volume_cypx_24h, 0)::bigint  AS volume_cypx_24h,
-        COALESCE(v.volume_units_24h, 0)         AS volume_units_24h,
-        COALESCE(v.sales_count_24h, 0)          AS sales_count_24h,
-        ROUND(
-          CASE 
-            WHEN COALESCE(v.avg_sale_price_24h, 0) > 0 
-            THEN ((c.current_min_price - v.avg_sale_price_24h) / v.avg_sale_price_24h) * 100
-            ELSE 0
-          END, 2
-        ) AS desviacion_porcentaje
-      FROM current_market c
-      LEFT JOIN ventas_24h v ON c.game_id = v.game_id
-      JOIN materiales m ON c.game_id = m.game_id
-      WHERE c.current_active_listings > 0
-      ORDER BY desviacion_porcentaje ASC
-      LIMIT 60;
+      SELECT * FROM metrics
+      ORDER BY 
+        CASE 
+          WHEN desviacion_vs_ultima < -20 THEN 1
+          WHEN desviacion_vs_ultima > 35  THEN 2
+          ELSE 3
+        END,
+        desviacion_vs_ultima ASC
+      LIMIT 20;
     `;
 
     const result = await pool.query(query);
-    res.json(result.rows);
+    res.json(result.rows || []);
   } catch (err) {
-    console.error('Error en /api/market-metrics:', err);
-    res.status(500).json({ error: 'Error al obtener métricas de mercado' });
+    console.error('Error en /api/market-metrics:', err.message);
+    console.error('Stack:', err.stack);
+    res.status(500).json([]);  // ← siempre array para que frontend no rompa
   }
 });
 

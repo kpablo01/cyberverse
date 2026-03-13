@@ -18,77 +18,135 @@ export async function initMarketLiveTab(config = { mode: 'read' }) {
     // --- RENDERIZADO DE MÉTRICAS ---
     const renderMetrics = (metrics) => {
         if (!elements.metrics) return;
-
-        const sortedMetrics = [...metrics].sort((a, b) => 
-        Number(a.desviacion_porcentaje) - Number(b.desviacion_porcentaje)
-        );
-
-        const totalActivity = sortedMetrics.reduce((acc, m) => 
-        acc + Number(m.volume_cypx_24h || 0), 0
-        );
-
+    
+        // Protección principal: si metrics NO es un array válido
+        if (!metrics || !Array.isArray(metrics)) {
+            console.error("renderMetrics recibió algo que NO es un array:", metrics);
+            console.log("Tipo recibido:", typeof metrics, metrics);
+    
+            // Mostrar mensaje visible en la interfaz en lugar de romper todo
+            elements.metrics.innerHTML = `
+                <div class="p-6 bg-red-950/70 border border-red-700/70 rounded-xl text-red-300 text-center shadow-lg">
+                    <p class="text-lg font-bold mb-3">Error al cargar las tarjetas del mercado</p>
+                    <p>No se recibió un listado válido de ítems desde el servidor.</p>
+                    <p class="text-sm mt-4 opacity-80">
+                        Revisa la consola (F12 → Console) y la pestaña Network para ver la respuesta de <code>/api/market-metrics</code>.<br>
+                        Intenta recargar la página o espera unos minutos.
+                    </p>
+                </div>`;
+            return;
+        }
+    
+        // Si llega hasta acá, metrics ES un array → podemos seguir
+    
+        // Ordenamos: primero los más baratos vs última venta, luego los que más subieron
+        const sortedMetrics = [...metrics].sort((a, b) => {
+            const devUltA = Number(a.desviacion_vs_ultima || 0);
+            const devUltB = Number(b.desviacion_vs_ultima || 0);
+            const volA = Number(a.volume_cypx_recent || 0);
+            const volB = Number(b.volume_cypx_recent || 0);
+    
+            // Prioridad 1: los que están muy baratos vs última venta
+            if (devUltA < -20 && devUltB >= -20) return -1;
+            if (devUltA >= -20 && devUltB < -20) return 1;
+    
+            // Prioridad 2: mayor desviación absoluta (más extrema)
+            const diffAbs = Math.abs(devUltB) - Math.abs(devUltA);
+            if (diffAbs !== 0) return diffAbs;
+    
+            // Desempate: mayor volumen
+            return volB - volA;
+        });
+    
+        // Calcular volumen total (solo si hay datos)
+        const totalVol = sortedMetrics.reduce((acc, m) => acc + Number(m.volume_cypx_recent || 0), 0);
+    
         const volEl = document.getElementById('stat-volume');
         if (volEl) {
-        volEl.textContent = `${totalActivity.toLocaleString()} CYPX`;
-        volEl.title = "Total en CYPX de todas las ventas reales confirmadas en las últimas 24 horas (suma de todos los ítems)";
+            volEl.textContent = totalVol > 0 ? `${totalVol.toLocaleString()} CYPX` : "0 CYPX";
+            volEl.title = "Volumen total CYPX en ventas confirmadas (últimos 7 días)";
         }
-
-        // Cartel explicativo fijo (se agrega solo una vez)
+    
+        // Ayuda (solo se agrega una vez)
         if (!document.getElementById('metrics-help')) {
-        const helpDiv = document.createElement('div');
-        helpDiv.id = 'metrics-help';
-        helpDiv.className = 'text-[11px] text-gray-300 bg-gray-900/50 p-3 rounded-lg mb-4 border border-gray-700/60 shadow-sm';
-        helpDiv.innerHTML = `
-            <strong>Guía rápida de las tarjetas</strong><br>
-            • Muestran los 8 ítems más interesantes del mercado ahora.<br>
-            • <span class="text-green-400">OPORTUNIDAD</span> = más barato que el promedio de ventas reales de hoy<br>
-            • <span class="text-red-400">CARO</span> = más caro que lo que se vendió recientemente<br>
-            • Pasá el mouse por encima de cualquier número o badge para ver qué significa.
-        `;
-        elements.metrics.parentNode.insertBefore(helpDiv, elements.metrics);
+            const help = document.createElement('div');
+            help.id = 'metrics-help';
+            help.className = 'text-[11px] text-gray-300 bg-gray-900/50 p-3 rounded-lg mb-4 border border-gray-700/60 shadow-sm';
+            help.innerHTML = `
+                <strong>Guía rápida de oportunidades</strong><br>
+                • Solo se muestran ítems con al menos 4 ventas y volumen decente (≥800 CYPX).<br>
+                • <span class="text-green-400">OPORTUNIDAD</span> → listado mucho más barato que la última venta conocida<br>
+                • <span class="text-amber-400">SUBIENDO</span> → precio actual significativamente más alto que la última venta<br>
+                • En mercados pequeños priorizamos la <strong>última venta</strong> sobre promedios históricos.<br>
+                • Pasá el mouse por encima para ver detalles.
+            `;
+            elements.metrics.parentNode.insertBefore(help, elements.metrics);
         }
-
+    
+        // Render de las tarjetas (máximo 8)
         elements.metrics.innerHTML = sortedMetrics.slice(0, 8).map(m => {
-        const pct = Number(m.desviacion_porcentaje);
-        const isCheap = pct < -4;
-        const isExpensive = pct > 6;
-        const barWidth = Math.min(Math.abs(pct) * 1.8, 100);
-        const barColor = isCheap ? 'bg-green-500' : isExpensive ? 'bg-red-500' : 'bg-amber-500';
-
-        let badge = '';
-        if (isCheap) {
-            badge = `<span class="absolute top-2 right-2 bg-green-700/95 text-white text-[9px] px-2.5 py-1 rounded-full font-bold shadow cursor-help" title="Oportunidad detectada: este ítem está ${Math.abs(pct).toFixed(1)}% más barato que el precio promedio real de ventas de las últimas 24 horas. ¡Buena chance de compra!">OPORTUNIDAD</span>`;
-        }
-        if (isExpensive) {
-            badge = `<span class="absolute top-2 right-2 bg-red-700/95 text-white text-[9px] px-2.5 py-1 rounded-full font-bold shadow cursor-help" title="Alerta: está ${pct.toFixed(1)}% más caro que el promedio de ventas reales de hoy. Podría ser buen momento para vender.">CARO</span>`;
-        }
-
-        return `
-            <div class="relative bg-gray-900/70 border ${isCheap ? 'border-green-600/60' : isExpensive ? 'border-red-600/60' : 'border-gray-700/50'} p-4 rounded-xl overflow-hidden hover:border-purple-500/50 transition group shadow-md">
-            ${badge}
-            <div class="flex items-center gap-3 mb-3">
-                <img src="${m.imagen_url}" class="w-10 h-10 object-contain rounded-md" title="Imagen del ítem en el juego">
-                <div class="min-w-0">
-                <h4 class="text-[10px] font-black text-gray-500 uppercase tracking-wider truncate" title="Nombre del ítem en Cyberverse">${m.nombre}</h4>
-                <div class="text-2xl font-mono font-extrabold text-white leading-none" title="Precio más bajo que alguien ofrece ahora mismo en el mercado">${Number(m.current_min_price).toFixed(2)} CYPX</div>
-                </div>
-            </div>
-            <div class="space-y-2 text-[9.5px] font-mono">
-                <div class="flex justify-between items-center" title="Porcentaje de diferencia entre el precio actual mínimo y el promedio real de ventas de las últimas 24 horas">
-                <span class="text-gray-400">Cambio vs ventas reales</span>
-                <span class="${pct < 0 ? 'text-green-400' : 'text-red-400'} font-bold" title="Negativo = más barato | Positivo = más caro">
-                    ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%
-                </span>
-                </div>
-                <div class="h-2 bg-gray-800 rounded-full overflow-hidden" title="Barra visual del cambio porcentual (más larga = más diferencia)">
-                <div class="${barColor} h-full transition-all duration-700" style="width: ${barWidth}%"></div>
-                </div>
-                <div class="flex justify-between text-gray-400" title="Valor total en CYPX de las ventas confirmadas de este ítem en las últimas 24 horas">
-                <span>Ventas reales 24h</span>
-                <span class="text-cyan-300 font-medium">${Number(m.volume_cypx_24h || 0).toLocaleString()} CYPX</span>
-                </div>
-            </div>
-            </div>`;
+            const devUlt = Number(m.desviacion_vs_ultima || 0);
+            const isOportunidad = devUlt < -20;
+            const isSubiendo    = devUlt > 35;
+            const isRiesgoso    = Number(m.sales_count_recent || 0) <= 6 || Number(m.volume_cypx_recent || 0) < 1200;
+    
+            const barWidth = Math.min(Math.abs(devUlt) * 1.6, 100);
+            let barColor = 'bg-amber-500';
+            let borderColor = 'border-gray-700/50';
+    
+            if (isOportunidad) { 
+                barColor = 'bg-green-500'; 
+                borderColor = 'border-green-600/60'; 
+            }
+            if (isSubiendo) { 
+                barColor = 'bg-amber-500'; 
+                borderColor = 'border-amber-600/60'; 
+            }
+    
+            let badge = '';
+            if (isOportunidad) {
+                badge = `<span class="absolute top-2 right-2 bg-green-700/95 text-white text-[9px] px-2.5 py-1 rounded-full font-bold shadow cursor-help" title="Muy por debajo de la última venta conocida – buena chance de compra">OPORTUNIDAD</span>`;
+            } else if (isSubiendo) {
+                badge = `<span class="absolute top-2 right-2 bg-amber-600/95 text-white text-[9px] px-2.5 py-1 rounded-full font-bold shadow cursor-help" title="Precio actual mucho más alto que la última venta – posible subida">SUBIENDO</span>`;
+            }
+            if (isRiesgoso && !badge) {
+                badge = `<span class="absolute top-2 right-2 bg-gray-600/80 text-white text-[9px] px-2 py-0.5 rounded-full font-medium shadow cursor-help" title="Bajo volumen de ventas → mayor riesgo / volatilidad">bajo vol</span>`;
+            }
+    
+            return `
+                <div class="relative bg-gray-900/70 border ${borderColor} p-4 rounded-xl overflow-hidden hover:border-purple-500/50 transition group shadow-md">
+                    ${badge}
+                    <div class="flex items-center gap-3 mb-3">
+                        <img src="${m.imagen_url || 'https://via.placeholder.com/40'}" class="w-10 h-10 object-contain rounded-md" alt="${m.nombre || 'Ítem'}">
+                        <div class="min-w-0">
+                            <h4 class="text-[10px] font-black text-gray-500 uppercase tracking-wider truncate" title="${m.nombre || 'Sin nombre'}">
+                                ${m.nombre || 'Ítem desconocido'}
+                            </h4>
+                            <div class="text-2xl font-mono font-extrabold text-white leading-none">
+                                ${Number(m.current_min_price || 0).toFixed(2)} CYPX
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-1.5 text-[9.5px] font-mono">
+                        <div class="flex justify-between items-center" title="Diferencia porcentual vs última venta conocida">
+                            <span class="text-gray-400">vs última venta</span>
+                            <span class="${devUlt < 0 ? 'text-green-400' : devUlt > 0 ? 'text-orange-300' : 'text-gray-400'} font-bold">
+                                ${devUlt > 0 ? '+' : ''}${devUlt.toFixed(1)}%
+                            </span>
+                        </div>
+                        <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
+                            <div class="${barColor} h-full transition-all duration-700" style="width: ${barWidth}%"></div>
+                        </div>
+                        <div class="flex justify-between text-gray-400">
+                            <span>Última venta</span>
+                            <span>${Number(m.last_sale_price || '?').toFixed(2)} CYPX</span>
+                        </div>
+                        <div class="flex justify-between text-gray-400 pt-1 border-t border-gray-700/40">
+                            <span>Volumen 7d</span>
+                            <span class="text-cyan-300 font-medium">${Number(m.volume_cypx_recent || 0).toLocaleString()} CYPX</span>
+                        </div>
+                    </div>
+                </div>`;
         }).join('');
     };
 
