@@ -366,26 +366,34 @@ app.get('/api/market-history/:game_id', async (req, res) => {
         FROM days d
         LEFT JOIN ventas_diarias  v ON d.dia = v.dia
         LEFT JOIN listados_diarios l ON d.dia = l.dia
+      ),
+      material_info AS (
+        SELECT compra
+        FROM materiales
+        WHERE game_id = $1
+        LIMIT 1
       )
       SELECT 
-        fecha,
-        precio_promedio,
-        precio_minimo,
-        precio_mediana,
-        ventas,
-        listados_activos,
-        unidades_vendidas
-      FROM combined
-      ORDER BY dia ASC;
+        c.fecha,
+        c.precio_promedio,
+        c.precio_minimo,
+        c.precio_mediana,
+        c.ventas,
+        c.listados_activos,
+        c.unidades_vendidas,
+        COALESCE(m.compra, 0) AS compra
+      FROM combined c
+      CROSS JOIN material_info m
+      ORDER BY c.dia ASC;
     `;
 
     const result = await pool.query(query, [game_id]);
     
-    // Opcional: si no hay NINGÚN dato, devolvemos array vacío o mensaje
     res.json(result.rows.length > 0 ? result.rows : []);
     
   } catch (err) {
-    console.error('Error en market-history:', err);
+    console.error('Error en /api/market-history:', err.message);
+    console.error(err.stack);
     res.status(500).json({ error: 'Error al obtener historial' });
   }
 });
