@@ -202,12 +202,11 @@ app.put('/api/materiales/link-game-id/:id', async (req, res) => {
       return res.status(400).json({ error: 'Faltan datos (game_id o id)' });
     }
 
+    const imagen_url = `https://www.cyberversewiki.com/img/items/${game_id}.png`;
+
     await pool.query(
-      `UPDATE materiales 
-       SET game_id = $1,
-           imagen_url = CONCAT('https://www.cyberversewiki.com/img/items/', $1, '.png')
-       WHERE id = $2`,
-      [game_id, req.params.id]
+      `UPDATE materiales SET game_id = $1, imagen_url = $2 WHERE id = $3`,
+      [game_id, imagen_url, req.params.id]
     );
 
     res.json({ success: true, message: 'Vínculo actualizado' });
