@@ -340,10 +340,21 @@ window.verHistorialMensual = async function(gameId, nombre) {
     document.getElementById('grafico-titulo').textContent = `${nombre} - Historial 30 Días`;
 
     try {
-        const res = await fetch(`/api/market-history-monthly/${gameId}`);
+        const res = await fetch(`/api/market-history/${gameId}`);  // ← Cambia el endpoint si lo renombraste
         const data = await res.json();
         
-        const precioBase = data.length > 0 ? Number(data[0].precio_base) : 0;
+        // Si no hay datos → salir o mostrar mensaje
+        if (!data || data.length === 0) {
+            console.warn("No hay datos de historial");
+            return;
+        }
+
+        // Tomamos el primer precio promedio o mínimo disponible como base
+        const preciosValidos = data
+            .map(d => d.precio_promedio ?? d.precio_minimo)
+            .filter(v => v != null && v > 0);
+        
+        const precioBase = preciosValidos.length > 0 ? preciosValidos[0] : 0;
         const targetTarea = precioBase * 1.4;
 
         const ctx = document.getElementById('canvas-monthly-detail').getContext('2d');
@@ -354,21 +365,50 @@ window.verHistorialMensual = async function(gameId, nombre) {
             data: {
                 labels: data.map(d => d.fecha),
                 datasets: [
-                    { label: 'Precio Mínimo', data: data.map(d => d.precio_min), borderColor: '#10b981', fill: true, backgroundColor: 'rgba(16, 185, 129, 0.1)', tension: 0.3 },
-                    { label: `Límite Tarea (140%): ${targetTarea.toFixed(2)}`, data: data.map(() => targetTarea), borderColor: '#f59e0b', borderDash: [10, 5], pointRadius: 0, fill: false },
-                    { label: 'Promedio Market', data: data.map(d => d.precio_avg), borderColor: '#a855f7', borderDash: [3, 3], fill: false }
+                    { 
+                        label: 'Precio Mínimo (venta o listado)', 
+                        data: data.map(d => d.precio_minimo ?? null), 
+                        borderColor: '#10b981', 
+                        fill: true, 
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                        tension: 0.3 
+                    },
+                    { 
+                        label: `Límite Tarea (140%): ${targetTarea.toFixed(2)}`, 
+                        data: data.map(() => targetTarea), 
+                        borderColor: '#f59e0b', 
+                        borderDash: [10, 5], 
+                        pointRadius: 0, 
+                        fill: false 
+                    },
+                    { 
+                        label: 'Promedio (ventas preferente)', 
+                        data: data.map(d => d.precio_promedio ?? d.precio_minimo ?? null), 
+                        borderColor: '#a855f7', 
+                        borderDash: [3, 3], 
+                        fill: false 
+                    }
                 ]
             },
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true, 
+                maintainAspectRatio: false,
                 plugins: { legend: { labels: { color: '#9ca3af' } } },
                 scales: { 
-                    y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' }, suggestedMax: targetTarea * 1.1 }, 
+                    y: { 
+                        grid: { color: '#1f2937' }, 
+                        ticks: { color: '#9ca3af' }, 
+                        suggestedMax: targetTarea * 1.1 
+                    }, 
                     x: { ticks: { color: '#9ca3af' } } 
-                }
+                },
+                // Opcional: mostrar null como huecos en vez de conectar líneas
+                spanGaps: false  
             }
         });
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+        console.error("Error al cargar historial:", err); 
+    }
 };
 
 window.vincularGameID = async function(gameId, localId) {

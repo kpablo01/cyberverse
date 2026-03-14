@@ -315,16 +315,79 @@ app.get('/api/market-metrics', async (req, res) => {
   }
 });
 
-// HISTORIAL MENSUAL (30 Días)
-app.get('/api/market-history-monthly/:game_id', async (req, res) => {
+app.get('/api/market-history/:game_id', async (req, res) => {
   try {
+    const { game_id } = req.params;
+
     const query = `
-      SELECT TO_CHAR(DATE_TRUNC('day', listed_at), 'DD/MM') as fecha, MIN(price) as precio_min, AVG(price) as precio_avg
-      FROM market_listings WHERE game_id = $1 AND listed_at >= NOW() - INTERVAL '30 days'
-      GROUP BY DATE_TRUNC('day', listed_at) ORDER BY DATE_TRUNC('day', listed_at) ASC;`;
-    const result = await pool.query(query, [req.params.game_id]);
-    res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+      WITH days AS (
+        -- Generamos los últimos 30 días (incluso sin datos)
+        SELECT generate_series(
+          DATE_TRUNC('day', NOW() - INTERVAL '29 days'),
+          DATE_TRUNC('day', NOW()),
+          '1 day'::interval
+        ) AS dia
+      ),
+      ventas_diarias AS (
+        SELECT 
+          DATE_TRUNC('day', fecha_deteccion) AS dia,
+          COUNT(*)                              AS ventas_count,
+          SUM(cantidad)                         AS unidades_vendidas,
+          ROUND(AVG(precio)::numeric, 2)        AS precio_promedio_ventas,
+          MIN(precio)                           AS precio_min_venta,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY precio) AS precio_mediana_venta
+        FROM ventas_detectadas
+        WHERE game_id = $1
+          AND fecha_deteccion >= NOW() - INTERVAL '30 days'
+        GROUP BY DATE_TRUNC('day', fecha_deteccion)
+      ),
+      listados_diarios AS (
+        SELECT 
+          DATE_TRUNC('day', listed_at) AS dia,
+          COUNT(*)                              AS listings_count,
+          SUM(amount)                           AS total_amount_listed,
+          ROUND(MIN(price)::numeric, 2)         AS min_price_listing,
+          ROUND(AVG(price)::numeric, 2)         AS avg_price_listing
+        FROM market_listings
+        WHERE game_id = $1
+          AND listed_at >= NOW() - INTERVAL '30 days'
+        GROUP BY DATE_TRUNC('day', listed_at)
+      ),
+      combined AS (
+        SELECT 
+          d.dia,
+          TO_CHAR(d.dia, 'DD/MM')                          AS fecha,
+          COALESCE(v.precio_promedio_ventas, l.avg_price_listing) AS precio_promedio,
+          COALESCE(v.precio_min_venta, l.min_price_listing)       AS precio_minimo,
+          COALESCE(v.precio_mediana_venta, NULL)                  AS precio_mediana,
+          COALESCE(v.ventas_count, 0)                             AS ventas,
+          COALESCE(l.listings_count, 0)                           AS listados_activos,
+          COALESCE(v.unidades_vendidas, 0)                        AS unidades_vendidas
+        FROM days d
+        LEFT JOIN ventas_diarias  v ON d.dia = v.dia
+        LEFT JOIN listados_diarios l ON d.dia = l.dia
+      )
+      SELECT 
+        fecha,
+        precio_promedio,
+        precio_minimo,
+        precio_mediana,
+        ventas,
+        listados_activos,
+        unidades_vendidas
+      FROM combined
+      ORDER BY dia ASC;
+    `;
+
+    const result = await pool.query(query, [game_id]);
+    
+    // Opcional: si no hay NINGÚN dato, devolvemos array vacío o mensaje
+    res.json(result.rows.length > 0 ? result.rows : []);
+    
+  } catch (err) {
+    console.error('Error en market-history:', err);
+    res.status(500).json({ error: 'Error al obtener historial' });
+  }
 });
 
 app.get('/api/market-sales-tracker', async (req, res) => {
