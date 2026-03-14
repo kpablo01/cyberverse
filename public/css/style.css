@@ -137,3 +137,9 @@ body {
 }
 
 .hidden { display: none; }
+
+/* GRAFICOS */
+#modal-grafico > div {
+    max-height: 92vh;
+    overflow-y: auto;
+  }

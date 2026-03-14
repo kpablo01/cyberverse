@@ -341,77 +341,57 @@ window.verHistorialMensual = async function(gameId, nombre) {
 
     try {
         const res = await fetch(`/api/market-history/${gameId}`);
-        
-        if (!res.ok) {
-            console.error(`Error HTTP: ${res.status} ${res.statusText}`);
-            return;
-        }
+        if (!res.ok) return;
 
         const data = await res.json();
-        
-        if (!data || data.length === 0) {
-            console.warn("No hay datos de historial");
-            return;
-        }
+        if (!data || data.length === 0) return;
 
-        // Tomamos el valor de compra (viene en todas las filas)
+        // Datos base
         const compra = Number(data[0].compra) || 0;
-        
-        // Porcentaje inicial
-        let porcentaje = 140;  // 140% por defecto
+        let porcentaje = 140;
+        let targetTarea = compra * (porcentaje / 100);
 
-        const targetTarea = compra * (porcentaje / 100);
-
-        // ────────────────────────────────────────────────
-        // Preparar datos con relleno para evitar huecos feos
-        // ────────────────────────────────────────────────
+        // Preparar datos con relleno de huecos
         const fechas = data.map(d => d.fecha);
         const preciosMinimos = data.map(d => d.precio_minimo ?? null);
         const preciosPromedio = data.map(d => d.precio_promedio ?? null);
 
-        // Forward fill: usa el último valor conocido hacia adelante
         function forwardFill(arr) {
             let ultimo = null;
-            return arr.map(val => {
-                if (val !== null) ultimo = val;
-                return ultimo ?? null;
-            });
+            return arr.map(v => (v !== null ? (ultimo = v) : ultimo));
         }
-
-        // Backward fill: usa el primer valor conocido hacia atrás
         function backwardFill(arr) {
             let primero = null;
             for (let i = arr.length - 1; i >= 0; i--) {
-                if (arr[i] !== null) {
-                    primero = arr[i];
-                    break;
-                }
+                if (arr[i] !== null) { primero = arr[i]; break; }
             }
-            if (primero === null) return arr;
-            return arr.map(val => val ?? primero);
+            return arr.map(v => v ?? primero);
         }
 
-        // Aplicamos relleno completo (forward + backward)
         const preciosMinRellenos = backwardFill(forwardFill(preciosMinimos));
         const preciosPromRellenos = backwardFill(forwardFill(preciosPromedio));
 
+        // Función para colores dinámicos (verde = mercado mejor | rojo = tarea mejor)
+        function getMinLineColors(minPrices, target) {
+            return minPrices.map(price => {
+                const netoMercado = (price || 0) * 0.95; // 5% fee
+                return netoMercado >= target ? '#10b981' : '#ef4444';
+            });
+        }
+
         // ────────────────────────────────────────────────
-        // Controles del porcentaje (slider)
+        // Controles + recomendación
         // ────────────────────────────────────────────────
         const controlsHTML = `
-            <div style="margin: 15px 0; text-align: center; color: #9ca3af; font-size: 0.95em;">
-                <label for="porcentajeTarea">
-                    Límite tarea: <span id="porcentajeValor">${porcentaje}%</span> 
-                    de compra (${compra.toFixed(2)})
-                </label>
-                <br>
-                <input type="range" id="porcentajeTarea" 
-                       min="50" max="200" value="${porcentaje}" step="5"
-                       style="width: 70%; accent-color: #f59e0b; margin: 8px 0;">
-                <br>
-                <small>Valor calculado: 
-                    <strong id="targetValor">${targetTarea.toFixed(2)}</strong>
-                </small>
+            <div style="margin:15px 0; text-align:center; color:#9ca3af; font-size:0.95em;">
+                <label>Límite tarea: <span id="porcentajeValor">${porcentaje}%</span> de compra (${compra.toFixed(2)})</label><br>
+                <input type="range" id="porcentajeTarea" min="50" max="200" value="${porcentaje}" step="5"
+                       style="width:70%; accent-color:#f59e0b; margin:8px 0;"><br>
+                <small>Valor calculado: <strong id="targetValor">${targetTarea.toFixed(2)}</strong></small><br><br>
+                
+                <div id="recomendacionHoy" style="font-weight:bold; font-size:1.05em;">
+                    <!-- se actualiza con JS -->
+                </div>
             </div>
         `;
 
@@ -429,10 +409,12 @@ window.verHistorialMensual = async function(gameId, nombre) {
         }
 
         // ────────────────────────────────────────────────
-        // Crear / actualizar gráfico
+        // Crear gráfico
         // ────────────────────────────────────────────────
         const ctx = canvas.getContext('2d');
         if (detailChart) detailChart.destroy();
+
+        const minColors = getMinLineColors(preciosMinRellenos, targetTarea);
 
         detailChart = new Chart(ctx, {
             type: 'line',
@@ -440,14 +422,13 @@ window.verHistorialMensual = async function(gameId, nombre) {
                 labels: fechas,
                 datasets: [
                     {
-                        label: 'Precio Mínimo',
+                        label: 'Precio Mínimo (neto -5% fee)',
                         data: preciosMinRellenos,
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                        fill: true,
+                        borderColor: minColors,
+                        borderWidth: 3,
                         tension: 0.25,
                         pointRadius: 0,
-                        borderWidth: 2
+                        fill: false
                     },
                     {
                         label: `Límite Tarea (${porcentaje}%): ${targetTarea.toFixed(2)}`,
@@ -472,48 +453,57 @@ window.verHistorialMensual = async function(gameId, nombre) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        labels: { color: '#9ca3af', font: { size: 12 } }
-                    }
-                },
+                plugins: { legend: { labels: { color: '#9ca3af' } } },
                 scales: {
-                    y: {
-                        grid: { color: '#1f2937' },
-                        ticks: { color: '#9ca3af' },
-                        suggestedMax: Math.max(targetTarea * 1.35, 10) || 100
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: '#9ca3af' }
-                    }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
+                    y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' }, suggestedMax: Math.max(targetTarea * 1.35, 10) },
+                    x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
                 }
             }
         });
 
         // ────────────────────────────────────────────────
-        // Listener del slider
+        // Actualizar recomendación y colores
         // ────────────────────────────────────────────────
+        function actualizarRecomendacion() {
+            const hoyIndex = preciosMinRellenos.length - 1;
+            const precioMinHoy = preciosMinRellenos[hoyIndex] || 0;
+            const netoHoy = precioMinHoy * 0.95;
+            const diffPct = targetTarea > 0 ? ((netoHoy - targetTarea) / targetTarea) * 100 : 0;
+
+            const recDiv = document.getElementById('recomendacionHoy');
+            if (netoHoy >= targetTarea) {
+                recDiv.innerHTML = `✅ <span style="color:#10b981">CONVIENE MERCADO</span> (+${diffPct.toFixed(1)}%)`;
+            } else {
+                recDiv.innerHTML = `❌ <span style="color:#ef4444">CONVIENE TAREA</span> (${diffPct.toFixed(1)}%)`;
+            }
+        }
+
+        actualizarRecomendacion(); // inicial
+
+        // Listener del slider
         const slider = document.getElementById('porcentajeTarea');
         const porcentajeSpan = document.getElementById('porcentajeValor');
         const targetSpan = document.getElementById('targetValor');
 
         slider.addEventListener('input', (e) => {
             porcentaje = Number(e.target.value);
-            const nuevoTarget = compra * (porcentaje / 100);
+            targetTarea = compra * (porcentaje / 100);
 
             porcentajeSpan.textContent = `${porcentaje}%`;
-            targetSpan.textContent = nuevoTarget.toFixed(2);
+            targetSpan.textContent = targetTarea.toFixed(2);
 
-            detailChart.data.datasets[1].label = `Límite Tarea (${porcentaje}%): ${nuevoTarget.toFixed(2)}`;
-            detailChart.data.datasets[1].data = Array(fechas.length).fill(nuevoTarget);
-            detailChart.options.scales.y.suggestedMax = Math.max(nuevoTarget * 1.35, 10) || 100;
+            // Actualizar línea naranja
+            detailChart.data.datasets[1].label = `Límite Tarea (${porcentaje}%): ${targetTarea.toFixed(2)}`;
+            detailChart.data.datasets[1].data = Array(fechas.length).fill(targetTarea);
+
+            // Actualizar colores de la línea de Precio Mínimo
+            detailChart.data.datasets[0].borderColor = getMinLineColors(preciosMinRellenos, targetTarea);
+
+            // Ajustar escala Y
+            detailChart.options.scales.y.suggestedMax = Math.max(targetTarea * 1.35, 10);
 
             detailChart.update();
+            actualizarRecomendacion();
         });
 
     } catch (err) {

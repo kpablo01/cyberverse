@@ -197,13 +197,21 @@ app.get('/api/market-live', async (req, res) => {
 app.put('/api/materiales/link-game-id/:id', async (req, res) => {
   try {
     const { game_id } = req.body;
-    // Validamos que vengan ambos datos
+
     if (!game_id || !req.params.id) {
-        return res.status(400).json({ error: 'Faltan datos (game_id o id)' });
+      return res.status(400).json({ error: 'Faltan datos (game_id o id)' });
     }
-    
-    await pool.query('UPDATE materiales SET game_id = $1 WHERE id = $2', [game_id, req.params.id]);
+
+    await pool.query(
+      `UPDATE materiales 
+       SET game_id = $1,
+           imagen_url = CONCAT('https://www.cyberversewiki.com/img/items/', $1, '.png')
+       WHERE id = $2`,
+      [game_id, req.params.id]
+    );
+
     res.json({ success: true, message: 'Vínculo actualizado' });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
