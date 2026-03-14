@@ -293,7 +293,7 @@ app.get('/api/market-metrics', async (req, res) => {
         LEFT JOIN last_sale l ON c.game_id = l.game_id
         JOIN materiales m ON c.game_id = m.game_id
         WHERE c.current_active_listings > 0
-          AND COALESCE(v.sales_count_recent, 0) >= 4
+          AND COALESCE(v.sales_count_recent, 0) >= 2
       )
       SELECT * FROM metrics
       ORDER BY 
