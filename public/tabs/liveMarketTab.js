@@ -422,7 +422,7 @@ window.verHistorialMensual = async function(gameId, nombre) {
                 labels: fechas,
                 datasets: [
                     {
-                        label: 'Precio Mínimo (neto -5% fee)',
+                        label: 'Precio Mínimo',
                         data: preciosMinRellenos,
                         borderColor: minColors,
                         borderWidth: 3,
@@ -431,7 +431,7 @@ window.verHistorialMensual = async function(gameId, nombre) {
                         fill: false
                     },
                     {
-                        label: `Límite Tarea (${porcentaje}%): ${targetTarea.toFixed(2)}`,
+                        label: `Tarea (${porcentaje}%): ${targetTarea.toFixed(2)}`,
                         data: Array(fechas.length).fill(targetTarea),
                         borderColor: '#f59e0b',
                         borderDash: [8, 4],
