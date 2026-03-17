@@ -453,6 +453,10 @@ window.verHistorialMensual = async function(gameId, nombre) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
                 plugins: { legend: { labels: { color: '#9ca3af' } } },
                 scales: {
                     y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' }, suggestedMax: Math.max(targetTarea * 1.35, 10) },
