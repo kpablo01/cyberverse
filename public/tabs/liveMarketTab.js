@@ -431,7 +431,7 @@ window.verHistorialMensual = async function(gameId, nombre) {
                         fill: false
                     },
                     {
-                        label: `Tarea (${porcentaje}%): ${targetTarea.toFixed(2)}`,
+                        label: `Tarea (${porcentaje}%)`,
                         data: Array(fechas.length).fill(targetTarea),
                         borderColor: '#f59e0b',
                         borderDash: [8, 4],
