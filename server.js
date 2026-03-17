@@ -181,7 +181,6 @@ app.get('/api/market-live', async (req, res) => {
       LEFT JOIN materiales m ON l.game_id = m.game_id
       -- FILTRO INTELIGENTE: Trae todo lo que se actualizó en la última ráfaga (último minuto)
       WHERE l.snapshot_at >= (SELECT MAX(snapshot_at) FROM market_listings) - INTERVAL '1 minute'
-      AND l.game_id not in (239,237,235,219,284,220,210,178)
       ORDER BY l.listed_at DESC;
     `;
     
