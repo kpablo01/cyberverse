@@ -428,6 +428,8 @@ window.verHistorialMensual = async function(gameId, nombre) {
                         borderWidth: 3,
                         tension: 0.25,
                         pointRadius: 0,
+                        pointHoverRadius: 6,
+                        pointHitRadius: 20,
                         fill: false
                     },
                     {
@@ -453,14 +455,43 @@ window.verHistorialMensual = async function(gameId, nombre) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+        
                 interaction: {
                     mode: 'index',
                     intersect: false
                 },
-                plugins: { legend: { labels: { color: '#9ca3af' } } },
+        
+                plugins: {
+                    legend: {
+                        labels: { color: '#9ca3af' }
+                    },
+        
+                    tooltip: {
+                        callbacks: {
+                            afterBody: function(context) {
+                                const index = context[0].dataIndex;
+                                const row = data[index];
+        
+                                return [
+                                    `Ventas: ${row.ventas}`,
+                                    `Unidades vendidas: ${row.unidades_vendidas}`,
+                                    `Listados activos: ${row.listados_activos}`
+                                ];
+                            }
+                        }
+                    }
+                },
+        
                 scales: {
-                    y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' }, suggestedMax: Math.max(targetTarea * 1.35, 10) },
-                    x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
+                    y: {
+                        grid: { color: '#1f2937' },
+                        ticks: { color: '#9ca3af' },
+                        suggestedMax: Math.max(targetTarea * 1.35, 10)
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#9ca3af' }
+                    }
                 }
             }
         });
